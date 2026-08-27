@@ -413,8 +413,10 @@ async function renderShiftForm(idToken, app) {
   });
 }
 
-/** 未登録・未承認・在籍なし等の共通メッセージ表示。renderRegisterへの分岐が必要な場合はtrueを返す。 */
-function renderDenied(reason, idToken, app) {
+/** 未登録・未承認・在籍なし等の共通メッセージ表示。renderRegisterへの分岐が必要な場合はtrueを返す。
+ *  res … サーバーからの応答オブジェクト全体（デバッグ表示のため）。 */
+function renderDenied(res, idToken, app) {
+  const reason = res && res.reason;
   switch (reason) {
     case 'not_registered':
       renderRegister(idToken, app);
@@ -427,7 +429,7 @@ function renderDenied(reason, idToken, app) {
       return;
     default:
       app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
-        + '<p style="font-size:11px;color:#bbb;margin-top:20px;">(debug reason: ' + escapeHtml_(JSON.stringify(reason)) + ')</p>';
+        + '<p style="font-size:11px;color:#bbb;margin-top:20px;">(debug res: ' + escapeHtml_(JSON.stringify(res)) + ')</p>';
   }
 }
 
@@ -442,7 +444,7 @@ async function renderBoard(idToken, app, storeFilter) {
     return;
   }
   if (!res.allowed) {
-    return renderDenied(res.reason, idToken, app);
+    return renderDenied(res, idToken, app);
   }
 
   const filterOptionsHtml = ['全体', '全店舗対象'].concat(res.stores).map((s) => {
@@ -599,7 +601,7 @@ async function renderSuggest(idToken, app) {
     return;
   }
   if (!res.allowed) {
-    return renderDenied(res.reason, idToken, app);
+    return renderDenied(res, idToken, app);
   }
 
   const listHtml = res.items.length
