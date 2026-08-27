@@ -13,6 +13,15 @@
     color: #333;
   }
   .msg { font-size: 16px; line-height: 1.7; }
+  /* エラーの詳細。通常は非表示。URLの末尾に &debug=1 を付けたときだけ表示される。 */
+  .debug-detail { display: none; }
+  html.debug-on .debug-detail {
+    display: block;
+    margin-top: 20px;
+    font-size: 11px;
+    color: #bbb;
+    word-break: break-all;
+  }
   .btn {
     display: inline-block;
     margin-top: 24px;
@@ -204,6 +213,11 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwdDN-Q4kPR1etX1scvXFct
 
 const PAGE = new URLSearchParams(location.search).get('page') || '';
 
+// URLの末尾に &debug=1 を付けたときだけ、エラーの詳細を画面に表示する（原因調査用）
+if (new URLSearchParams(location.search).get('debug') === '1') {
+  document.documentElement.classList.add('debug-on');
+}
+
 // LINEのログイン情報が古くなっていた場合に、一度だけ自動で再ログインするための仕組み。
 // （無限ループを避けるため、1回試したらsessionStorageに印を付ける）
 function isTokenError_(res) {
@@ -313,7 +327,7 @@ async function main() {
       break;
     default:
       app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
-        + '<p style="font-size:11px;color:#bbb;margin-top:20px;">(debug reason: ' + escapeHtml_(JSON.stringify(res)) + ')</p>';
+        + '<p class="debug-detail">' + escapeHtml_(JSON.stringify(res)) + '</p>';
   }
 }
 
@@ -462,7 +476,7 @@ function renderDenied(res, idToken, app) {
       return;
     default:
       app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
-        + '<p style="font-size:11px;color:#bbb;margin-top:20px;">(debug res: ' + escapeHtml_(JSON.stringify(res)) + ')</p>';
+        + '<p class="debug-detail">' + escapeHtml_(JSON.stringify(res)) + '</p>';
   }
 }
 
