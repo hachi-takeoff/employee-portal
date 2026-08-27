@@ -277,7 +277,8 @@ async function main() {
       app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
       break;
     default:
-      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
+      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
+        + '<p style="font-size:11px;color:#bbb;margin-top:20px;">(debug reason: ' + escapeHtml_(JSON.stringify(res)) + ')</p>';
   }
 }
 
@@ -423,7 +424,8 @@ function renderDenied(reason, idToken, app) {
       app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
       return;
     default:
-      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
+      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
+        + '<p style="font-size:11px;color:#bbb;margin-top:20px;">(debug reason: ' + escapeHtml_(JSON.stringify(reason)) + ')</p>';
   }
 }
 
