@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>従業員ポータル</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
+    text-align: center;
+    padding: 48px 20px;
+    color: #333;
+  }
+  .msg { font-size: 16px; line-height: 1.7; }
+  .btn {
+    display: inline-block;
+    margin-top: 24px;
+    padding: 12px 28px;
+    background: #06C755;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+  }
+  input {
+    width: 85%;
+    max-width: 320px;
+    padding: 12px;
+    margin: 8px 0;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  .loading { color: #999; }
+
+  .shift-wrap { text-align: left; max-width: 520px; margin: 0 auto; }
+  .shift-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+  .shift-sub { color: #666; font-size: 14px; margin-bottom: 16px; }
+  table.shift-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.shift-table th, table.shift-table td {
+    border-bottom: 1px solid #eee;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  table.shift-table td.date-cell { text-align: left; white-space: nowrap; }
+  table.shift-table select {
+    font-size: 15px;
+    padding: 4px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+  table.shift-table input.time-input {
+    width: 100%;
+    max-width: 110px;
+    padding: 6px;
+    margin: 0;
+    font-size: 13px;
+  }
+  .sat { color: #2a6fdb; }
+  .sun { color: #d94f4f; }
+  .submit-row { text-align: center; margin-top: 20px; }
+
+  .post-wrap { text-align: left; max-width: 520px; margin: 0 auto; }
+  .post-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 90px;
+    padding: 10px;
+    font-size: 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: inherit;
+  }
+  .post-form input.store-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+  }
+  .post-list { margin-top: 24px; }
+  .post-item {
+    border-bottom: 1px solid #eee;
+    padding: 12px 0;
+  }
+  .post-meta { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .post-body { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
+  .status-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .status-未対応 { background: #fdecea; color: #c0392b; }
+  .status-対応中 { background: #fff6da; color: #a67c00; }
+  .status-対応済み { background: #e6f6ea; color: #1e7e34; }
+  .answer-box {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #f5f7fa;
+    border-radius: 6px;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  .empty-note { color: #999; font-size: 14px; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <div id="app"><p class="loading">読み込み中...</p></div>
+
+<script>
+// ============================================================
+// この2つは環境に合わせて書き換えてください。
+//   LIFF_ID  … LINE DevelopersのLIFFアプリID
+//   GAS_URL  … GASウェブアプリの /exec URL（末尾に /exec まで含める）
+// ============================================================
+const LIFF_ID = '2010703154-HggFrqTC';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxB_bpQacFg30sr6NUtFgUkHjuzKApsFjL1HbyBSXsrVUU4P6p-d2qlN0gK0kQasdng/exec';
+
+const PAGE = new URLSearchParams(location.search).get('page') || '';
+
+// GAS側のJSON APIを呼び出すためのヘルパー（google.script.run の代わり）
+function callGet(action, params) {
+  const qs = new URLSearchParams(Object.assign({ action: action }, params || {})).toString();
+  return fetch(GAS_URL + '?' + qs).then((r) => r.json());
+}
+function callPost(action, params) {
+  return fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // プリフライトを避けるため text/plain で送る
+    body: JSON.stringify(Object.assign({ action: action }, params || {})),
+  }).then((r) => r.json());
+}
+
+async function main() {
+  const app = document.getElementById('app');
+
+  if (!LIFF_ID) {
+    app.innerHTML = '<p class="msg">LIFF_IDが未設定です。管理部にご連絡ください。</p>';
+    return;
+  }
+
+  await liff.init({ liffId: LIFF_ID });
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
+
+  const idToken = liff.getIDToken();
+  if (!idToken) {
+    app.innerHTML = '<p class="msg">LINEログイン情報を取得できませんでした。LIFFアプリのスコープ設定（openid）をご確認ください。</p>';
+    return;
+  }
+
+  if (PAGE === 'register') {
+    return renderRegister(idToken, app);
+  }
+
+  if (PAGE === 'shift') {
+    return renderShiftForm(idToken, app);
+  }
+
+  if (PAGE === 'board') {
+    return renderBoard(idToken, app);
+  }
+
+  if (PAGE === 'suggest') {
+    return renderSuggest(idToken, app);
+  }
+
+  // freee / manual / coupon などのゲート付きページ
+  let res;
+  try {
+    res = await callGet('resolveDestination', { idToken: idToken, page: PAGE });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+
+  if (res.allowed) {
+    location.href = res.url;
+    return;
+  }
+
+  switch (res.reason) {
+    case 'not_registered':
+      return renderRegister(idToken, app);
+    case 'not_approved':
+      app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+      break;
+    case 'inactive':
+      app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+      break;
+    default:
+      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
+  }
+}
+
+function renderRegister(idToken, app) {
+  app.innerHTML = `
+    <p class="msg">初めてのご利用ですね。<br>お名前と所属店舗を入力してください。</p>
+    <input id="name" placeholder="氏名（例：山田太郎）"><br>
+    <input id="store" placeholder="所属店舗（例：下高井戸店）"><br>
+    <a href="#" class="btn" id="submitBtn">登録する</a>
+  `;
+  document.getElementById('submitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    const store = document.getElementById('store').value.trim();
+    if (!name || !store) {
+      alert('氏名と所属店舗を入力してください');
+      return;
+    }
+    app.innerHTML = '<p class="loading">登録中...</p>';
+    try {
+      const res = await callPost('registerUser', { idToken: idToken, name: name, store: store });
+      if (res.ok) {
+        app.innerHTML = '<p class="msg">登録を受け付けました。<br>管理部の承認後にご利用いただけます。</p>';
+      } else if (res.error === 'already_registered') {
+        app.innerHTML = '<p class="msg">登録済みです。管理部の承認をお待ちください。</p>';
+      } else {
+        app.innerHTML = '<p class="msg">登録に失敗しました。管理部までご連絡ください。</p>';
+      }
+    } catch (err) {
+      app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    }
+  });
+}
+
+async function renderShiftForm(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getShiftForm', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+
+  if (!res.allowed) {
+    switch (res.reason) {
+      case 'not_registered':
+        return renderRegister(idToken, app);
+      case 'not_approved':
+        app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+        break;
+      case 'inactive':
+        app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+        break;
+      case 'period_not_set':
+        app.innerHTML = '<p class="msg">現在、シフト希望の募集期間が設定されていません。<br>管理部までご連絡ください。</p>';
+        break;
+      default:
+        app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
+    }
+    return;
+  }
+
+  const rows = res.dates.map((d) => {
+    const existing = res.existing[d.date] || {};
+    const wdClass = d.weekday === '土' ? 'sat' : (d.weekday === '日' ? 'sun' : '');
+    const options = ['○', '△', '×'].map((v) => {
+      const sel = existing.availability === v ? 'selected' : '';
+      return `<option value="${v}" ${sel}>${v}</option>`;
+    }).join('');
+    const timeVal = existing.timePref ? existing.timePref.replace(/"/g, '&quot;') : '';
+    return `
+      <tr data-date="${d.date}">
+        <td class="date-cell">${d.date.slice(5)}（<span class="${wdClass}">${d.weekday}</span>）</td>
+        <td><select class="avail-select">${options}</select></td>
+        <td><input class="time-input" type="text" placeholder="例 17-22時" value="${timeVal}"></td>
+      </tr>`;
+  }).join('');
+
+  app.innerHTML = `
+    <div class="shift-wrap">
+      <div class="shift-title">シフト希望提出（${res.period.label}）</div>
+      <div class="shift-sub">${res.name}さん（${res.store}）<br>出勤できる日は「○」、難しい日は「×」、応相談は「△」を選び、希望があれば時間帯も入力してください。</div>
+      <table class="shift-table">
+        <thead><tr><th>日付</th><th>可否</th><th>希望時間帯</th></tr></thead>
+        <tbody id="shiftRows">${rows}</tbody>
+      </table>
+      <div class="submit-row">
+        <a href="#" class="btn" id="shiftSubmitBtn">この内容で提出する</a>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('shiftSubmitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const trs = document.querySelectorAll('#shiftRows tr');
+    const entries = Array.from(trs).map((tr) => ({
+      date: tr.getAttribute('data-date'),
+      availability: tr.querySelector('.avail-select').value,
+      timePref: tr.querySelector('.time-input').value.trim(),
+    }));
+
+    document.getElementById('shiftSubmitBtn').textContent = '送信中...';
+    try {
+      const submitRes = await callPost('submitShift', { idToken: idToken, periodLabel: res.period.label, entries: entries });
+      if (submitRes.ok) {
+        app.innerHTML = '<p class="msg">シフト希望を提出しました。<br>締切前であれば、もう一度開いて修正・再提出できます。</p>';
+      } else {
+        app.innerHTML = '<p class="msg">提出に失敗しました。時間をおいて再度お試しください。</p>';
+      }
+    } catch (err) {
+      app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    }
+  });
+}
+
+/** 未登録・未承認・在籍なし等の共通メッセージ表示。renderRegisterへの分岐が必要な場合はtrueを返す。 */
+function renderDenied(reason, idToken, app) {
+  switch (reason) {
+    case 'not_registered':
+      renderRegister(idToken, app);
+      return;
+    case 'not_approved':
+      app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+      return;
+    case 'inactive':
+      app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+      return;
+    default:
+      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
+  }
+}
+
+async function renderBoard(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getBoardPosts', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+  if (!res.allowed) {
+    return renderDenied(res.reason, idToken, app);
+  }
+
+  const storeFieldHtml = res.isHq
+    ? '<input class="store-input" id="boardStore" placeholder="投稿先の店舗名（例：下高井戸店）">'
+    : '';
+
+  const listHtml = res.posts.length
+    ? res.posts.map((p) => `
+        <div class="post-item">
+          <div class="post-meta">${p.postedAt}　${p.name}${res.isHq ? '（' + p.store + '）' : ''}</div>
+          <div class="post-body">${escapeHtml_(p.body)}</div>
+        </div>`).join('')
+    : '<p class="empty-note">まだ投稿はありません。</p>';
+
+  app.innerHTML = `
+    <div class="post-wrap">
+      <div class="shift-title">引き継ぎ掲示板${res.isHq ? '（全店舗）' : '（' + res.myStore + '）'}</div>
+      <div class="shift-sub">申し送り事項や引き継ぎ内容を投稿してください。${res.isHq ? '' : 'この店舗に所属するスタッフと本部が閲覧できます。'}</div>
+      <div class="post-form">
+        ${storeFieldHtml}
+        <textarea id="boardBody" placeholder="引き継ぎ内容を入力してください"></textarea>
+        <div class="submit-row"><a href="#" class="btn" id="boardSubmitBtn">投稿する</a></div>
+      </div>
+      <div class="post-list">${listHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('boardSubmitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const body = document.getElementById('boardBody').value;
+    const storeInput = document.getElementById('boardStore');
+    const store = storeInput ? storeInput.value : '';
+    if (!body.trim()) {
+      alert('内容を入力してください');
+      return;
+    }
+    if (res.isHq && !store.trim()) {
+      alert('投稿先の店舗名を入力してください');
+      return;
+    }
+    try {
+      const submitRes = await callPost('postBoard', { idToken: idToken, store: store, body: body });
+      if (submitRes.ok) {
+        renderBoard(idToken, app);
+      } else {
+        alert('投稿に失敗しました。時間をおいて再度お試しください。');
+      }
+    } catch (err) {
+      alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+    }
+  });
+}
+
+async function renderSuggest(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getSuggestions', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+  if (!res.allowed) {
+    return renderDenied(res.reason, idToken, app);
+  }
+
+  const listHtml = res.items.length
+    ? res.items.map((it) => `
+        <div class="post-item">
+          <div class="post-meta">${it.postedAt}${res.isHq ? '　' + it.name + '（' + it.store + '）' : ''}
+            <span class="status-badge status-${it.status}">${it.status}</span>
+          </div>
+          <div class="post-body">${escapeHtml_(it.body)}</div>
+          ${it.answer ? `<div class="answer-box">本部より：${escapeHtml_(it.answer)}</div>` : ''}
+        </div>`).join('')
+    : '<p class="empty-note">まだ投稿はありません。</p>';
+
+  app.innerHTML = `
+    <div class="post-wrap">
+      <div class="shift-title">本部への要望・質問${res.isHq ? '（全員分）' : ''}</div>
+      <div class="shift-sub">${res.isHq ? '全スタッフからの投稿を確認できます。' : '内容は投稿者本人と本部のみが閲覧できます。'}</div>
+      <div class="post-form">
+        <textarea id="suggestBody" placeholder="要望・改善案・質問などを入力してください"></textarea>
+        <div class="submit-row"><a href="#" class="btn" id="suggestSubmitBtn">送信する</a></div>
+      </div>
+      <div class="post-list">${listHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('suggestSubmitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const body = document.getElementById('suggestBody').value;
+    if (!body.trim()) {
+      alert('内容を入力してください');
+      return;
+    }
+    try {
+      const submitRes = await callPost('postSuggestion', { idToken: idToken, body: body });
+      if (submitRes.ok) {
+        renderSuggest(idToken, app);
+      } else {
+        alert('送信に失敗しました。時間をおいて再度お試しください。');
+      }
+    } catch (err) {
+      alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+    }
+  });
+}
+
+function escapeHtml_(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+main().catch((err) => {
+  document.getElementById('app').innerHTML = '<p class="msg">エラーが発生しました。管理部までご連絡ください。</p>';
+  console.error(err);
+});
+</script>
+</body>
+</html>
