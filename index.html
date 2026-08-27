@@ -227,7 +227,9 @@ async function main() {
 
   await liff.init({ liffId: LIFF_ID });
   if (!liff.isLoggedIn()) {
-    liff.login();
+    // redirectUriを指定しないと、ログイン後に ?page=xxx が消えたURLへ戻ってしまうため、
+    // 現在のURL（クエリ文字列込み）を明示的に指定する。
+    liff.login({ redirectUri: location.href });
     return;
   }
 
