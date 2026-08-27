@@ -23,7 +23,7 @@
     text-decoration: none;
     font-weight: bold;
   }
-  input {
+  input, select {
     width: 85%;
     max-width: 320px;
     padding: 12px;
@@ -31,29 +31,35 @@
     font-size: 16px;
     border: 1px solid #ccc;
     border-radius: 6px;
+    background: #fff;
   }
   .loading { color: #999; }
 
   .shift-wrap { text-align: left; max-width: 520px; margin: 0 auto; }
   .shift-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
   .shift-sub { color: #666; font-size: 14px; margin-bottom: 16px; }
-  table.shift-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  table.shift-table th, table.shift-table td {
-    border-bottom: 1px solid #eee;
-    padding: 8px 4px;
-    text-align: center;
-  }
-  table.shift-table td.date-cell { text-align: left; white-space: nowrap; }
-  table.shift-table select {
-    font-size: 15px;
-    padding: 4px;
-    border-radius: 4px;
+  .shift-day { border-bottom: 1px solid #eee; padding: 12px 0; }
+  .shift-day:first-of-type { padding-top: 0; }
+  .shift-day-label { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+  .avail-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
+  .avail-btn {
+    flex: 1;
+    padding: 9px 0;
+    font-size: 13px;
+    font-weight: bold;
+    font-family: inherit;
     border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    color: #777;
+    cursor: pointer;
   }
-  table.shift-table input.time-input {
+  .avail-btn.active { background: #06C755; color: #fff; border-color: #06C755; }
+  .avail-btn.active[data-value="不可"] { background: #d94f4f; border-color: #d94f4f; }
+  .shift-day input.time-input {
     width: 100%;
-    max-width: 110px;
-    padding: 6px;
+    box-sizing: border-box;
+    padding: 8px 10px;
     margin: 0;
     font-size: 13px;
   }
@@ -83,6 +89,20 @@
     padding: 12px 0;
   }
   .post-meta { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .store-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #eef1ef;
+    color: #555;
+    margin-right: 6px;
+  }
+  .store-chip.store-shimotakaido { background: #e5f0fb; color: #1b5fb0; }
+  .store-chip.store-chitosekarasuyama { background: #fdefe0; color: #b0611b; }
+  .store-chip.store-sengawa { background: #f2e8fb; color: #7231b0; }
+  .store-chip.store-all { background: #06C755; color: #fff; }
   .post-body { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
   .status-badge {
     display: inline-block;
@@ -94,6 +114,15 @@
   .status-未対応 { background: #fdecea; color: #c0392b; }
   .status-対応中 { background: #fff6da; color: #a67c00; }
   .status-対応済み { background: #e6f6ea; color: #1e7e34; }
+  .category-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 4px;
+  }
+  .category-general { background: #eef1ef; color: #555; }
+  .category-bug { background: #fde7e0; color: #b0401b; }
   .answer-box {
     margin-top: 8px;
     padding: 8px 10px;
@@ -103,6 +132,62 @@
     white-space: pre-wrap;
   }
   .empty-note { color: #999; font-size: 14px; margin-top: 16px; }
+
+  .request-box {
+    background: #f5f7fa;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 18px;
+  }
+  .request-label { font-size: 13px; font-weight: bold; }
+  .request-sub { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .btn-outline {
+    background: #fff;
+    color: #06C755;
+    border: 1px solid #06C755;
+  }
+
+  .filter-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 4px;
+  }
+  .filter-select { display: block; margin-bottom: 16px; }
+  .comment-list { margin-top: 8px; }
+  .comment-item {
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #f5f7fa;
+    border-radius: 6px;
+  }
+  .comment-meta { font-size: 11px; color: #999; }
+  .comment-body { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .comment-form {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .comment-form .comment-input {
+    flex: 1;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 8px;
+    font-size: 14px;
+  }
+  .comment-form .comment-btn {
+    display: inline-block;
+    padding: 8px 14px;
+    background: #06C755;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -196,17 +281,23 @@ async function main() {
   }
 }
 
+const STORE_OPTIONS = ['下高井戸店', '千歳烏山店', '仙川店', '本部'];
+
 function renderRegister(idToken, app) {
+  const storeOptionsHtml = ['<option value="" disabled selected>選択してください</option>']
+    .concat(STORE_OPTIONS.map((s) => `<option value="${s}">${s}</option>`))
+    .join('');
   app.innerHTML = `
     <p class="msg">初めてのご利用ですね。<br>お名前と所属店舗を入力してください。</p>
-    <input id="name" placeholder="氏名（例：山田太郎）"><br>
-    <input id="store" placeholder="所属店舗（例：下高井戸店）"><br>
+    <input id="name" placeholder="氏名（例：山田太郎／スペースなしで入力）"><br>
+    <select id="store">${storeOptionsHtml}</select><br>
     <a href="#" class="btn" id="submitBtn">登録する</a>
   `;
   document.getElementById('submitBtn').addEventListener('click', async (ev) => {
     ev.preventDefault();
-    const name = document.getElementById('name').value.trim();
-    const store = document.getElementById('store').value.trim();
+    // 全角・半角スペースを除去して表記を統一する
+    const name = document.getElementById('name').value.trim().replace(/[\s　]+/g, '');
+    const store = document.getElementById('store').value;
     if (!name || !store) {
       alert('氏名と所属店舗を入力してください');
       return;
@@ -248,8 +339,8 @@ async function renderShiftForm(idToken, app) {
       case 'inactive':
         app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
         break;
-      case 'period_not_set':
-        app.innerHTML = '<p class="msg">現在、シフト希望の募集期間が設定されていません。<br>管理部までご連絡ください。</p>';
+      case 'window_closed':
+        app.innerHTML = '<p class="msg">現在、シフト希望の受付期間ではありません。<br>次回の受付は' + escapeHtml_(res.nextWindowLabel || '') + 'です。</p>';
         break;
       default:
         app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
@@ -257,44 +348,53 @@ async function renderShiftForm(idToken, app) {
     return;
   }
 
-  const rows = res.dates.map((d) => {
+  const availabilityOptions = res.availabilityOptions || ['昼', '夜', '終日', '不可'];
+  const days = res.dates.map((d) => {
     const existing = res.existing[d.date] || {};
     const wdClass = d.weekday === '土' ? 'sat' : (d.weekday === '日' ? 'sun' : '');
-    const options = ['○', '△', '×'].map((v) => {
-      const sel = existing.availability === v ? 'selected' : '';
-      return `<option value="${v}" ${sel}>${v}</option>`;
-    }).join('');
     const timeVal = existing.timePref ? existing.timePref.replace(/"/g, '&quot;') : '';
+    const btnsHtml = availabilityOptions.map((v) =>
+      `<button type="button" class="avail-btn${existing.availability === v ? ' active' : ''}" data-value="${v}">${v}</button>`
+    ).join('');
     return `
-      <tr data-date="${d.date}">
-        <td class="date-cell">${d.date.slice(5)}（<span class="${wdClass}">${d.weekday}</span>）</td>
-        <td><select class="avail-select">${options}</select></td>
-        <td><input class="time-input" type="text" placeholder="例 17-22時" value="${timeVal}"></td>
-      </tr>`;
+      <div class="shift-day" data-date="${d.date}">
+        <div class="shift-day-label">${d.date.slice(5)}（<span class="${wdClass}">${d.weekday}</span>）</div>
+        <div class="avail-toggle">${btnsHtml}</div>
+        <input class="time-input" type="text" placeholder="希望時間・備考（任意）" value="${timeVal}">
+      </div>`;
   }).join('');
 
   app.innerHTML = `
     <div class="shift-wrap">
       <div class="shift-title">シフト希望提出（${res.period.label}）</div>
-      <div class="shift-sub">${res.name}さん（${res.store}）<br>出勤できる日は「○」、難しい日は「×」、応相談は「△」を選び、希望があれば時間帯も入力してください。</div>
-      <table class="shift-table">
-        <thead><tr><th>日付</th><th>可否</th><th>希望時間帯</th></tr></thead>
-        <tbody id="shiftRows">${rows}</tbody>
-      </table>
+      <div class="shift-sub">${res.name}さん（${res.store}）<br>日ごとに「昼」「夜」「終日」「不可」から選んでください。締切は${res.period.deadline || ''}です。</div>
+      <div id="shiftDays">${days}</div>
       <div class="submit-row">
         <a href="#" class="btn" id="shiftSubmitBtn">この内容で提出する</a>
       </div>
     </div>
   `;
 
+  document.querySelectorAll('.avail-toggle').forEach((group) => {
+    group.querySelectorAll('.avail-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        group.querySelectorAll('.avail-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  });
+
   document.getElementById('shiftSubmitBtn').addEventListener('click', async (ev) => {
     ev.preventDefault();
-    const trs = document.querySelectorAll('#shiftRows tr');
-    const entries = Array.from(trs).map((tr) => ({
-      date: tr.getAttribute('data-date'),
-      availability: tr.querySelector('.avail-select').value,
-      timePref: tr.querySelector('.time-input').value.trim(),
-    }));
+    const dayEls = document.querySelectorAll('#shiftDays .shift-day');
+    const entries = Array.from(dayEls).map((el) => {
+      const activeBtn = el.querySelector('.avail-btn.active');
+      return {
+        date: el.getAttribute('data-date'),
+        availability: activeBtn ? activeBtn.getAttribute('data-value') : '',
+        timePref: el.querySelector('.time-input').value.trim(),
+      };
+    });
 
     document.getElementById('shiftSubmitBtn').textContent = '送信中...';
     try {
@@ -327,12 +427,12 @@ function renderDenied(reason, idToken, app) {
   }
 }
 
-async function renderBoard(idToken, app) {
+async function renderBoard(idToken, app, storeFilter) {
   app.innerHTML = '<p class="loading">読み込み中...</p>';
 
   let res;
   try {
-    res = await callGet('getBoardPosts', { idToken: idToken });
+    res = await callGet('getBoardPosts', { idToken: idToken, store: storeFilter || '全体' });
   } catch (err) {
     app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
     return;
@@ -341,54 +441,146 @@ async function renderBoard(idToken, app) {
     return renderDenied(res.reason, idToken, app);
   }
 
-  const storeFieldHtml = res.isHq
-    ? '<input class="store-input" id="boardStore" placeholder="投稿先の店舗名（例：下高井戸店）">'
-    : '';
+  const filterOptionsHtml = ['全体', '全店舗対象'].concat(res.stores).map((s) => {
+    const sel = s === res.filter ? 'selected' : '';
+    return `<option value="${s}" ${sel}>${s}</option>`;
+  }).join('');
+  const postStoreOptionsHtml = ['<option value="" disabled selected>選択してください</option>']
+    .concat(res.postTargets.map((s) => `<option value="${s}">${s}</option>`))
+    .join('');
 
   const listHtml = res.posts.length
-    ? res.posts.map((p) => `
-        <div class="post-item">
-          <div class="post-meta">${p.postedAt}　${p.name}${res.isHq ? '（' + p.store + '）' : ''}</div>
+    ? res.posts.map((p) => {
+        const commentsHtml = p.comments.length
+          ? p.comments.map((c) => `
+              <div class="comment-item">
+                <div class="comment-meta">${c.commentedAt}　${escapeHtml_(c.name)}</div>
+                <div class="comment-body">${escapeHtml_(c.body)}</div>
+              </div>`).join('')
+          : '';
+        const storeLabel = `<span class="store-chip ${storeChipClass_(p.store)}">${p.store}</span>`;
+        return `
+        <div class="post-item" data-post-id="${p.postId}">
+          <div class="post-meta">${storeLabel}${p.postedAt}　${p.name}</div>
           <div class="post-body">${escapeHtml_(p.body)}</div>
-        </div>`).join('')
+          <div class="comment-list">${commentsHtml}</div>
+          <div class="comment-form">
+            <input class="comment-input" placeholder="コメントする">
+            <a href="#" class="comment-btn">送信</a>
+          </div>
+        </div>`;
+      }).join('')
     : '<p class="empty-note">まだ投稿はありません。</p>';
+
+  const missingStores = res.allStores.filter((s) => res.stores.indexOf(s) === -1);
+  const requestHtml = (res.restricted && missingStores.length)
+    ? `
+      <div class="request-box">
+        <div class="request-label">担当店舗が増えましたか？</div>
+        <div class="request-sub">追加してほしい店舗を選ぶと、本部に申請できます。</div>
+        <select id="requestStore">
+          <option value="" disabled selected>選択してください</option>
+          ${missingStores.map((s) => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+        <a href="#" class="btn btn-outline" id="requestStoreBtn">この店舗を追加申請する</a>
+      </div>`
+    : '';
 
   app.innerHTML = `
     <div class="post-wrap">
-      <div class="shift-title">引き継ぎ掲示板${res.isHq ? '（全店舗）' : '（' + res.myStore + '）'}</div>
-      <div class="shift-sub">申し送り事項や引き継ぎ内容を投稿してください。${res.isHq ? '' : 'この店舗に所属するスタッフと本部が閲覧できます。'}</div>
+      <div class="shift-title">引き継ぎ掲示板</div>
+      <div class="shift-sub">閲覧したい店舗の投稿が見られない場合は、下記から申請してください。</div>
+      <div class="filter-label">表示する店舗を絞り込む</div>
+      <select id="boardFilter" class="filter-select">${filterOptionsHtml}</select>
       <div class="post-form">
-        ${storeFieldHtml}
+        <select id="boardStore">${postStoreOptionsHtml}</select>
         <textarea id="boardBody" placeholder="引き継ぎ内容を入力してください"></textarea>
         <div class="submit-row"><a href="#" class="btn" id="boardSubmitBtn">投稿する</a></div>
       </div>
+      ${requestHtml}
       <div class="post-list">${listHtml}</div>
     </div>
   `;
 
+  document.getElementById('boardFilter').addEventListener('change', (ev) => {
+    renderBoard(idToken, app, ev.target.value);
+  });
+
   document.getElementById('boardSubmitBtn').addEventListener('click', async (ev) => {
     ev.preventDefault();
     const body = document.getElementById('boardBody').value;
-    const storeInput = document.getElementById('boardStore');
-    const store = storeInput ? storeInput.value : '';
-    if (!body.trim()) {
-      alert('内容を入力してください');
+    const store = document.getElementById('boardStore').value;
+    if (!store) {
+      alert('投稿先の店舗を選択してください');
       return;
     }
-    if (res.isHq && !store.trim()) {
-      alert('投稿先の店舗名を入力してください');
+    if (!body.trim()) {
+      alert('内容を入力してください');
       return;
     }
     try {
       const submitRes = await callPost('postBoard', { idToken: idToken, store: store, body: body });
       if (submitRes.ok) {
-        renderBoard(idToken, app);
+        renderBoard(idToken, app, document.getElementById('boardFilter').value);
       } else {
         alert('投稿に失敗しました。時間をおいて再度お試しください。');
       }
     } catch (err) {
       alert('通信エラーが発生しました。時間をおいて再度お試しください。');
     }
+  });
+
+  const requestStoreBtn = document.getElementById('requestStoreBtn');
+  if (requestStoreBtn) {
+    requestStoreBtn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const store = document.getElementById('requestStore').value;
+      if (!store) {
+        alert('追加してほしい店舗を選択してください');
+        return;
+      }
+      requestStoreBtn.textContent = '送信中...';
+      try {
+        const reqRes = await callPost('requestStoreAccess', { idToken: idToken, store: store });
+        if (reqRes.ok) {
+          alert('本部に申請しました。承認され次第、閲覧・投稿できるようになります。');
+          renderBoard(idToken, app, document.getElementById('boardFilter').value);
+        } else {
+          alert('申請に失敗しました。時間をおいて再度お試しください。');
+          requestStoreBtn.textContent = 'この店舗を追加申請する';
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+        requestStoreBtn.textContent = 'この店舗を追加申請する';
+      }
+    });
+  }
+
+  document.querySelectorAll('.comment-btn').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const postItem = btn.closest('.post-item');
+      const postId = postItem.getAttribute('data-post-id');
+      const input = postItem.querySelector('.comment-input');
+      const body = input.value;
+      if (!body.trim()) {
+        alert('コメント内容を入力してください');
+        return;
+      }
+      btn.textContent = '送信中...';
+      try {
+        const submitRes = await callPost('postBoardComment', { idToken: idToken, postId: postId, body: body });
+        if (submitRes.ok) {
+          renderBoard(idToken, app, document.getElementById('boardFilter').value);
+        } else {
+          alert('コメントの送信に失敗しました。時間をおいて再度お試しください。');
+          btn.textContent = '送信';
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+        btn.textContent = '送信';
+      }
+    });
   });
 }
 
@@ -410,6 +602,7 @@ async function renderSuggest(idToken, app) {
     ? res.items.map((it) => `
         <div class="post-item">
           <div class="post-meta">${it.postedAt}${res.isHq ? '　' + it.name + '（' + it.store + '）' : ''}
+            <span class="category-badge category-${it.category === '不具合報告' ? 'bug' : 'general'}">${it.category}</span>
             <span class="status-badge status-${it.status}">${it.status}</span>
           </div>
           <div class="post-body">${escapeHtml_(it.body)}</div>
@@ -420,9 +613,13 @@ async function renderSuggest(idToken, app) {
   app.innerHTML = `
     <div class="post-wrap">
       <div class="shift-title">本部への要望・質問${res.isHq ? '（全員分）' : ''}</div>
-      <div class="shift-sub">${res.isHq ? '全スタッフからの投稿を確認できます。' : '内容は投稿者本人と本部のみが閲覧できます。'}</div>
+      <div class="shift-sub">${res.isHq ? '全スタッフからの投稿を確認できます。' : '内容は投稿者本人と本部のみが閲覧できます。システムの不具合報告もこちらから送れます。'}</div>
       <div class="post-form">
-        <textarea id="suggestBody" placeholder="要望・改善案・質問などを入力してください"></textarea>
+        <select id="suggestCategory">
+          <option value="一般要望">一般要望・質問</option>
+          <option value="不具合報告">不具合報告（システムの不具合）</option>
+        </select>
+        <textarea id="suggestBody" placeholder="要望・改善案・質問や、不具合の内容（発生した画面・操作内容など）を入力してください"></textarea>
         <div class="submit-row"><a href="#" class="btn" id="suggestSubmitBtn">送信する</a></div>
       </div>
       <div class="post-list">${listHtml}</div>
@@ -432,12 +629,13 @@ async function renderSuggest(idToken, app) {
   document.getElementById('suggestSubmitBtn').addEventListener('click', async (ev) => {
     ev.preventDefault();
     const body = document.getElementById('suggestBody').value;
+    const category = document.getElementById('suggestCategory').value;
     if (!body.trim()) {
       alert('内容を入力してください');
       return;
     }
     try {
-      const submitRes = await callPost('postSuggestion', { idToken: idToken, body: body });
+      const submitRes = await callPost('postSuggestion', { idToken: idToken, body: body, category: category });
       if (submitRes.ok) {
         renderSuggest(idToken, app);
       } else {
@@ -449,6 +647,17 @@ async function renderSuggest(idToken, app) {
   });
 }
 
+/** 掲示板の店舗タグを店舗ごとに色分けするためのクラス名を返す */
+function storeChipClass_(store) {
+  const map = {
+    '下高井戸店': 'store-shimotakaido',
+    '千歳烏山店': 'store-chitosekarasuyama',
+    '仙川店': 'store-sengawa',
+    '全店舗対象': 'store-all',
+  };
+  return map[store] || '';
+}
+
 function escapeHtml_(s) {
   return String(s || '')
     .replace(/&/g, '&amp;')
@@ -458,7 +667,9 @@ function escapeHtml_(s) {
 }
 
 main().catch((err) => {
-  document.getElementById('app').innerHTML = '<p class="msg">エラーが発生しました。管理部までご連絡ください。</p>';
+  document.getElementById('app').innerHTML =
+    '<p class="msg">エラーが発生しました。管理部までご連絡ください。</p>' +
+    '<a class="btn" href="?page=suggest">要望・質問フォームを開く</a>';
   console.error(err);
 });
 </script>
