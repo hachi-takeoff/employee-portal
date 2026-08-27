@@ -204,17 +204,48 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbxB_bpQacFg30sr6NUtFgUk
 
 const PAGE = new URLSearchParams(location.search).get('page') || '';
 
-// GAS側のJSON APIを呼び出すためのヘルパー（google.script.run の代わり）
-function callGet(action, params) {
-  const qs = new URLSearchParams(Object.assign({ action: action }, params || {})).toString();
-  return fetch(GAS_URL + '?' + qs).then((r) => r.json());
+// LINEのログイン情報が古くなっていた場合に、一度だけ自動で再ログインするための仕組み。
+// （無限ループを避けるため、1回試したらsessionStorageに印を付ける）
+function isTokenError_(res) {
+  if (!res || res.ok !== false) return false;
+  const msg = String(res.message || '');
+  return res.error === 'server_error'
+    && (msg.indexOf('トークン') >= 0 || msg.indexOf('ログイン情報') >= 0);
 }
-function callPost(action, params) {
-  return fetch(GAS_URL, {
+function recoverLogin_(res) {
+  if (!isTokenError_(res)) return false;
+  let tried = false;
+  try { tried = sessionStorage.getItem('portalRelogin') === '1'; } catch (e) {}
+  if (tried) return false;
+  try { sessionStorage.setItem('portalRelogin', '1'); } catch (e) {}
+  try { liff.logout(); } catch (e) {}
+  liff.login({ redirectUri: location.href });
+  return true;
+}
+function clearReloginFlag_() {
+  try { sessionStorage.removeItem('portalRelogin'); } catch (e) {}
+}
+
+// GAS側のJSON APIを呼び出すためのヘルパー（google.script.run の代わり）
+async function callGet(action, params) {
+  const qs = new URLSearchParams(Object.assign({ action: action }, params || {})).toString();
+  const r = await fetch(GAS_URL + '?' + qs);
+  const res = await r.json();
+  // トークン切れなら再ログインへ飛ばす（このPromiseは解決させない）
+  if (recoverLogin_(res)) return new Promise(function () {});
+  if (res && res.ok !== false) clearReloginFlag_();
+  return res;
+}
+async function callPost(action, params) {
+  const r = await fetch(GAS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // プリフライトを避けるため text/plain で送る
     body: JSON.stringify(Object.assign({ action: action }, params || {})),
-  }).then((r) => r.json());
+  });
+  const res = await r.json();
+  if (recoverLogin_(res)) return new Promise(function () {});
+  if (res && res.ok !== false) clearReloginFlag_();
+  return res;
 }
 
 async function main() {
@@ -233,9 +264,11 @@ async function main() {
     return;
   }
 
-  const idToken = liff.getIDToken();
+  // IDトークンは発行時刻から短時間で期限切れになり、LIFFが自動更新しないため使わない。
+  // アクセストークンはliff.init()時に更新されるので、こちらをサーバー側の本人確認に使う。
+  const idToken = liff.getAccessToken();
   if (!idToken) {
-    app.innerHTML = '<p class="msg">LINEログイン情報を取得できませんでした。LIFFアプリのスコープ設定（openid）をご確認ください。</p>';
+    app.innerHTML = '<p class="msg">LINEログイン情報を取得できませんでした。一度LINEアプリからメニューを開き直してください。</p>';
     return;
   }
 
