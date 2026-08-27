@@ -65,6 +65,20 @@
   }
   .avail-btn.active { background: #06C755; color: #fff; border-color: #06C755; }
   .avail-btn.active[data-value="不可"] { background: #d94f4f; border-color: #d94f4f; }
+  /* 未入力の日付を強調する */
+  .shift-day.shift-day-error { background: #fff5f5; }
+  .shift-day.shift-day-error .shift-day-label { color: #d94f4f; }
+  .shift-notice {
+    display: none;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #fff0f0;
+    color: #c0392b;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: left;
+  }
   .shift-day input.time-input {
     width: 100%;
     box-sizing: border-box;
@@ -398,13 +412,15 @@ async function renderShiftForm(idToken, app) {
     return;
   }
 
-  const availabilityOptions = res.availabilityOptions || ['昼', '夜', '終日', '不可'];
+  const availabilityOptions = res.availabilityOptions || ['昼', '夜', '不可'];
   const days = res.dates.map((d) => {
     const existing = res.existing[d.date] || {};
+    // 保存済みの値は「昼・夜」のように「・」区切りで入っているので、配列に戻す
+    const selected = String(existing.availability || '').split('・').filter(Boolean);
     const wdClass = d.weekday === '土' ? 'sat' : (d.weekday === '日' ? 'sun' : '');
     const timeVal = existing.timePref ? existing.timePref.replace(/"/g, '&quot;') : '';
     const btnsHtml = availabilityOptions.map((v) =>
-      `<button type="button" class="avail-btn${existing.availability === v ? ' active' : ''}" data-value="${v}">${v}</button>`
+      `<button type="button" class="avail-btn${selected.indexOf(v) >= 0 ? ' active' : ''}" data-value="${v}">${v}</button>`
     ).join('');
     return `
       <div class="shift-day" data-date="${d.date}">
@@ -417,19 +433,30 @@ async function renderShiftForm(idToken, app) {
   app.innerHTML = `
     <div class="shift-wrap">
       <div class="shift-title">シフト希望提出（${res.period.label}）</div>
-      <div class="shift-sub">${res.name}さん（${res.store}）<br>日ごとに「昼」「夜」「終日」「不可」から選んでください。締切は${res.period.deadline || ''}です。</div>
+      <div class="shift-sub">${res.name}さん（${res.store}）<br>日ごとに「昼」「夜」「不可」から選んでください（昼と夜の両方を選べます）。<br>全ての日付の入力が必要です。締切は${res.period.deadline || ''}です。</div>
       <div id="shiftDays">${days}</div>
+      <div id="shiftNotice" class="shift-notice"></div>
       <div class="submit-row">
         <a href="#" class="btn" id="shiftSubmitBtn">この内容で提出する</a>
       </div>
     </div>
   `;
 
+  // 「昼」「夜」は複数選択できる。「不可」は他と同時に選べない（排他）。
   document.querySelectorAll('.avail-toggle').forEach((group) => {
     group.querySelectorAll('.avail-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        group.querySelectorAll('.avail-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
+        const value = btn.getAttribute('data-value');
+        const wasActive = btn.classList.contains('active');
+        if (value === '不可') {
+          group.querySelectorAll('.avail-btn').forEach((b) => b.classList.remove('active'));
+          if (!wasActive) btn.classList.add('active');
+        } else {
+          const naBtn = group.querySelector('.avail-btn[data-value="不可"]');
+          if (naBtn) naBtn.classList.remove('active');
+          btn.classList.toggle('active');
+        }
+        group.parentElement.classList.remove('shift-day-error');
       });
     });
   });
@@ -438,13 +465,35 @@ async function renderShiftForm(idToken, app) {
     ev.preventDefault();
     const dayEls = document.querySelectorAll('#shiftDays .shift-day');
     const entries = Array.from(dayEls).map((el) => {
-      const activeBtn = el.querySelector('.avail-btn.active');
+      const values = Array.from(el.querySelectorAll('.avail-btn.active'))
+        .map((b) => b.getAttribute('data-value'));
       return {
         date: el.getAttribute('data-date'),
-        availability: activeBtn ? activeBtn.getAttribute('data-value') : '',
+        availability: values.join('・'),
         timePref: el.querySelector('.time-input').value.trim(),
       };
     });
+
+    // 未入力の日付があれば提出させない
+    const missing = [];
+    entries.forEach((entry, i) => {
+      const el = dayEls[i];
+      if (entry.availability) {
+        el.classList.remove('shift-day-error');
+      } else {
+        el.classList.add('shift-day-error');
+        missing.push(entry.date.slice(5));
+      }
+    });
+    if (missing.length > 0) {
+      const notice = document.getElementById('shiftNotice');
+      notice.textContent = '未入力の日付があります（' + missing.join('、') + '）。全ての日付を選択してください。';
+      notice.style.display = 'block';
+      const firstError = document.querySelector('.shift-day-error');
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    document.getElementById('shiftNotice').style.display = 'none';
 
     document.getElementById('shiftSubmitBtn').textContent = '送信中...';
     try {
@@ -494,9 +543,11 @@ async function renderBoard(idToken, app, storeFilter) {
     return renderDenied(res, idToken, app);
   }
 
+  // 絞り込みの「全体」は、画面上は「全ての投稿」と表示する（サーバーに送る値は '全体' のまま）
   const filterOptionsHtml = ['全体', '全店舗対象'].concat(res.stores).map((s) => {
     const sel = s === res.filter ? 'selected' : '';
-    return `<option value="${s}" ${sel}>${s}</option>`;
+    const label = s === '全体' ? '全ての投稿' : s;
+    return `<option value="${s}" ${sel}>${label}</option>`;
   }).join('');
   const postStoreOptionsHtml = ['<option value="" disabled selected>選択してください</option>']
     .concat(res.postTargets.map((s) => `<option value="${s}">${s}</option>`))
@@ -546,6 +597,7 @@ async function renderBoard(idToken, app, storeFilter) {
       <div class="filter-label">表示する店舗を絞り込む</div>
       <select id="boardFilter" class="filter-select">${filterOptionsHtml}</select>
       <div class="post-form">
+        <div class="filter-label">対象店舗</div>
         <select id="boardStore">${postStoreOptionsHtml}</select>
         <textarea id="boardBody" placeholder="引き継ぎ内容を入力してください"></textarea>
         <div class="submit-row"><a href="#" class="btn" id="boardSubmitBtn">投稿する</a></div>
