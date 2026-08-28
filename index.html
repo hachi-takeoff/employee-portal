@@ -86,11 +86,41 @@
     margin: 0;
     font-size: 13px;
   }
+  /* 定休日：入力欄を出さず、グレーで表示する */
+  .shift-day.shift-day-closed { background: #f2f2f2; color: #999; }
+  .shift-day.shift-day-closed .shift-day-label { color: #999; }
+  .shift-day .closed-label { font-size: 13px; color: #999; padding: 6px 0; }
+  /* 締切超過のお知らせ */
+  .overdue-note {
+    margin: 12px 0 4px;
+    padding: 10px 12px;
+    border-left: 4px solid #e8a33d;
+    border-radius: 4px;
+    background: #fff8ec;
+    color: #8a5a00;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: left;
+  }
   .sat { color: #2a6fdb; }
   .sun { color: #d94f4f; }
   .submit-row { text-align: center; margin-top: 20px; }
 
   .post-wrap { text-align: left; max-width: 520px; margin: 0 auto; }
+  /* 投稿パーツ：絞り込みと見た目で区別できるよう、枠と背景色で囲む */
+  .post-form {
+    margin-top: 20px;
+    padding: 14px;
+    border: 1px solid #b7e3c7;
+    border-radius: 10px;
+    background: #f3fbf6;
+  }
+  .post-form-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1f8b4c;
+    margin-bottom: 10px;
+  }
   .post-form textarea {
     width: 100%;
     box-sizing: border-box;
@@ -403,9 +433,6 @@ async function renderShiftForm(idToken, app) {
       case 'inactive':
         app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
         break;
-      case 'window_closed':
-        app.innerHTML = '<p class="msg">現在、シフト希望の受付期間ではありません。<br>次回の受付は' + escapeHtml_(res.nextWindowLabel || '') + 'です。</p>';
-        break;
       default:
         app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
     }
@@ -419,6 +446,14 @@ async function renderShiftForm(idToken, app) {
     const selected = String(existing.availability || '').split('・').filter(Boolean);
     const wdClass = d.weekday === '土' ? 'sat' : (d.weekday === '日' ? 'sun' : '');
     const timeVal = existing.timePref ? existing.timePref.replace(/"/g, '&quot;') : '';
+    // 定休日は入力させない（グレー表示にして、選択肢も入力欄も出さない）
+    if (d.closed) {
+      return `
+        <div class="shift-day shift-day-closed" data-date="${d.date}" data-closed="1">
+          <div class="shift-day-label">${d.date.slice(5)}（<span class="${wdClass}">${d.weekday}</span>）</div>
+          <div class="closed-label">定休日</div>
+        </div>`;
+    }
     const btnsHtml = availabilityOptions.map((v) =>
       `<button type="button" class="avail-btn${selected.indexOf(v) >= 0 ? ' active' : ''}" data-value="${v}">${v}</button>`
     ).join('');
@@ -430,10 +465,16 @@ async function renderShiftForm(idToken, app) {
       </div>`;
   }).join('');
 
+  // 締切を過ぎていても提出はできる。その場合だけ注意書きを出す。
+  const overdueHtml = res.period.overdue
+    ? `<div class="overdue-note">締切（${res.period.deadline || ''}）を過ぎています。提出は可能ですが、シフトが確定済みの場合は希望に沿えないことがあります。至急提出してください。</div>`
+    : '';
+
   app.innerHTML = `
     <div class="shift-wrap">
       <div class="shift-title">シフト希望提出（${res.period.label}）</div>
-      <div class="shift-sub">${res.name}さん（${res.store}）<br>日ごとに「昼」「夜」「不可」から選んでください（昼と夜の両方を選べます）。<br>全ての日付の入力が必要です。締切は${res.period.deadline || ''}です。</div>
+      <div class="shift-sub">${res.name}さん（${res.store}）<br>日ごとに「昼」「夜」「不可」から選んでください（昼と夜の両方を選べます）。<br>定休日を除く全ての日付の入力が必要です。締切は${res.period.deadline || ''}です。</div>
+      ${overdueHtml}
       <div id="shiftDays">${days}</div>
       <div id="shiftNotice" class="shift-notice"></div>
       <div class="submit-row">
@@ -463,7 +504,8 @@ async function renderShiftForm(idToken, app) {
 
   document.getElementById('shiftSubmitBtn').addEventListener('click', async (ev) => {
     ev.preventDefault();
-    const dayEls = document.querySelectorAll('#shiftDays .shift-day');
+    // 定休日は入力対象外なので除外する
+    const dayEls = document.querySelectorAll('#shiftDays .shift-day:not(.shift-day-closed)');
     const entries = Array.from(dayEls).map((el) => {
       const values = Array.from(el.querySelectorAll('.avail-btn.active'))
         .map((b) => b.getAttribute('data-value'));
@@ -597,6 +639,7 @@ async function renderBoard(idToken, app, storeFilter) {
       <div class="filter-label">表示する店舗を絞り込む</div>
       <select id="boardFilter" class="filter-select">${filterOptionsHtml}</select>
       <div class="post-form">
+        <div class="post-form-title">新しく投稿する</div>
         <div class="filter-label">対象店舗</div>
         <select id="boardStore">${postStoreOptionsHtml}</select>
         <textarea id="boardBody" placeholder="引き継ぎ内容を入力してください"></textarea>
