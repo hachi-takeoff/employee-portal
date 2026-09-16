@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>従業員ポータル</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
+    text-align: center;
+    padding: 48px 20px;
+    color: #333;
+  }
+  .msg { font-size: 16px; line-height: 1.7; }
+  /* エラーの詳細。通常は非表示。URLの末尾に &debug=1 を付けたときだけ表示される。 */
+  .debug-detail { display: none; }
+  html.debug-on .debug-detail {
+    display: block;
+    margin-top: 20px;
+    font-size: 11px;
+    color: #bbb;
+    word-break: break-all;
+  }
+  .btn {
+    display: inline-block;
+    margin-top: 24px;
+    padding: 12px 28px;
+    background: #06C755;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+  }
+  input, select {
+    width: 85%;
+    max-width: 320px;
+    padding: 12px;
+    margin: 8px 0;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .loading { color: #999; }
+
+  .shift-wrap { text-align: left; max-width: 520px; margin: 0 auto; }
+  .shift-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+  .shift-sub { color: #666; font-size: 14px; margin-bottom: 16px; }
+  .shift-day { border-bottom: 1px solid #eee; padding: 12px 0; }
+  .shift-day:first-of-type { padding-top: 0; }
+  .shift-day-label { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+  .avail-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
+  .avail-btn {
+    flex: 1;
+    padding: 9px 0;
+    font-size: 13px;
+    font-weight: bold;
+    font-family: inherit;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    color: #777;
+    cursor: pointer;
+  }
+  .avail-btn.active { background: #06C755; color: #fff; border-color: #06C755; }
+  .avail-btn.active[data-value="不可"] { background: #d94f4f; border-color: #d94f4f; }
+  /* 未入力の日付を強調する */
+  .shift-day.shift-day-error { background: #fff5f5; }
+  .shift-day.shift-day-error .shift-day-label { color: #d94f4f; }
+  .shift-notice {
+    display: none;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #fff0f0;
+    color: #c0392b;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: left;
+  }
+  .shift-day input.time-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    margin: 0;
+    font-size: 13px;
+  }
+  /* 定休日：入力欄を出さず、グレーで表示する */
+  .shift-day.shift-day-closed { background: #f2f2f2; color: #999; }
+  .shift-day.shift-day-closed .shift-day-label { color: #999; }
+  .shift-day .closed-label { font-size: 13px; color: #999; padding: 6px 0; }
+  /* 提出済みのお知らせ・控えの見出し */
+  .submitted-note {
+    margin: 12px 0 4px;
+    padding: 10px 12px;
+    border-left: 4px solid #06C755;
+    border-radius: 4px;
+    background: #f1faf4;
+    color: #1f7a45;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: left;
+  }
+  /* 提出控えの一覧 */
+  .receipt-list { margin-top: 16px; text-align: left; }
+  .receipt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+  }
+  .receipt-date { width: 78px; flex: none; color: #555; }
+  .receipt-value { width: 64px; flex: none; font-weight: bold; }
+  .receipt-note { flex: 1; font-size: 12px; color: #888; word-break: break-all; }
+  .btn.btn-sub { background: #fff; color: #06C755; border: 1px solid #06C755; }
+  /* 締切超過のお知らせ */
+  .overdue-note {
+    margin: 12px 0 4px;
+    padding: 10px 12px;
+    border-left: 4px solid #e8a33d;
+    border-radius: 4px;
+    background: #fff8ec;
+    color: #8a5a00;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: left;
+  }
+  .sat { color: #2a6fdb; }
+  .sun { color: #d94f4f; }
+  .submit-row { text-align: center; margin-top: 20px; }
+
+  /* ===== 入口メニュー ===== */
+  .home-wrap { max-width: 480px; margin: 0 auto; }
+  .home-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .home-item {
+    display: block;
+    padding: 14px 16px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background: #fff;
+    text-decoration: none;
+    text-align: left;
+  }
+  .home-item-label {
+    display: block;
+    font-size: 15px;
+    font-weight: bold;
+    color: #1f8b4c;
+  }
+  .home-item-note {
+    display: block;
+    font-size: 12px;
+    color: #999;
+    margin-top: 2px;
+  }
+  .home-foot { font-size: 11px; color: #aaa; margin-top: 20px; }
+
+  /* ===== マニュアル ===== */
+  .manual-wrap { max-width: 640px; margin: 0 auto; text-align: left; }
+  .manual-back {
+    padding: 6px 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #555;
+    background: #f2f4f3;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .manual-title { font-size: 20px; font-weight: bold; margin-bottom: 14px; }
+  .manual-body { font-size: 15px; line-height: 1.85; word-break: break-word; }
+  .manual-p { margin: 0 0 12px; }
+  .manual-h1 { font-size: 18px; margin: 24px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+  .manual-h2 { font-size: 16px; margin: 20px 0 6px; }
+  .manual-h3 { font-size: 15px; margin: 16px 0 4px; color: #555; }
+  .manual-list { margin: 0 0 12px; padding-left: 22px; }
+  .manual-list li { margin-bottom: 4px; }
+  .manual-todo { margin-bottom: 6px; }
+  .manual-check { margin-right: 6px; }
+  .manual-quote {
+    margin: 0 0 12px;
+    padding: 4px 0 4px 12px;
+    border-left: 3px solid #ddd;
+    color: #666;
+  }
+  .manual-callout {
+    display: flex;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #f5f7f6;
+  }
+  .manual-callout-icon { flex: none; font-size: 18px; line-height: 1.5; }
+  .manual-callout-body { flex: 1; min-width: 0; }
+  .manual-callout-body .manual-p:last-child { margin-bottom: 0; }
+  .manual-toggle { margin-bottom: 10px; }
+  .manual-toggle summary { cursor: pointer; font-weight: bold; }
+  .manual-hr { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+  .manual-code {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #f4f5f4;
+    font-size: 13px;
+    overflow-x: auto;
+  }
+  .manual-figure { margin: 0 0 14px; }
+  .manual-figure img { max-width: 100%; border-radius: 8px; }
+  .manual-figure figcaption { font-size: 12px; color: #999; margin-top: 4px; }
+  /* 子ページへのリンク。画面内で開くのでURLは変わらない */
+  .manual-link {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: bold;
+    text-align: left;
+    color: #1f8b4c;
+    background: #fff;
+    border: 1px solid #cfe8da;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  /* Notionの段組みは、スマホでは縦に並べる */
+  .manual-columns { display: flex; flex-direction: column; gap: 0; }
+  .manual-column { min-width: 0; }
+  .manual-table-wrap { overflow-x: auto; margin-bottom: 14px; }
+  .manual-table { border-collapse: collapse; font-size: 13px; }
+  .manual-table td { border: 1px solid #e3e6e5; padding: 6px 10px; }
+
+  /* ===== 従業員クーポン ===== */
+  .coupon-wrap { max-width: 480px; margin: 0 auto; text-align: left; }
+  .coupon-holder {
+    text-align: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+  }
+  .coupon-holder-name { font-size: 18px; font-weight: bold; }
+  .coupon-holder-store { font-size: 13px; color: #888; margin-top: 2px; }
+  /* 本人用／ご家族・お友達用の切替 */
+  .coupon-tabs {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .coupon-tab {
+    flex: 1;
+    padding: 10px 4px;
+    font-size: 11px;
+    font-weight: bold;
+    font-family: inherit;
+    line-height: 1.4;
+    color: #777;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .coupon-tab.active { color: #fff; background: #06C755; border-color: #06C755; }
+  .coupon-tab.active[data-kind="guest"] { background: #2f6fb0; border-color: #2f6fb0; }
+  .coupon-clock {
+    text-align: center;
+    margin: 16px 0 20px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #f5f7f6;
+  }
+  .coupon-clock-label { font-size: 11px; color: #888; }
+  .coupon-clock-time {
+    font-size: 17px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    margin: 4px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .coupon-clock-note { font-size: 11px; color: #999; line-height: 1.5; }
+  .coupon-card {
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+  .coupon-card-staff { background: linear-gradient(135deg, #06C755, #04a445); }
+  .coupon-card-guest { background: linear-gradient(135deg, #4a8fd4, #2f6fb0); }
+  .coupon-card-title { font-size: 14px; font-weight: bold; opacity: 0.95; }
+  .coupon-card-rate {
+    font-size: 34px;
+    font-weight: bold;
+    line-height: 1.2;
+    margin: 4px 0 10px;
+  }
+  .coupon-conditions {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .coupon-conditions li { margin-bottom: 2px; }
+  .coupon-foot { font-size: 11px; color: #999; line-height: 1.6; }
+
+  .post-wrap { text-align: left; max-width: 520px; margin: 0 auto; }
+  /* 店舗の絞り込みタブ。店舗が増えても横スクロールで収まる */
+  .board-tabs {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    padding-bottom: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .board-tab {
+    flex: none;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    white-space: nowrap;
+    color: #666;
+    background: #f2f4f3;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .board-tab.active {
+    color: #fff;
+    background: #06C755;
+    font-weight: bold;
+  }
+  /* 投稿パーツ：既定では畳んでおき、一覧を優先して見せる */
+  .post-form {
+    margin-top: 24px;
+    padding: 0;
+    border: 1px solid #b7e3c7;
+    border-radius: 10px;
+    background: #f3fbf6;
+  }
+  .post-form[open] { padding-bottom: 14px; }
+  .post-form > *:not(summary) { margin-left: 14px; margin-right: 14px; }
+  .post-form-title {
+    padding: 12px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #1f8b4c;
+    cursor: pointer;
+    list-style: none;
+  }
+  .post-form-title::-webkit-details-marker { display: none; }
+  .post-form[open] .post-form-title { border-bottom: 1px solid #d6efe0; margin-bottom: 12px; }
+  .post-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 90px;
+    padding: 10px;
+    font-size: 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: inherit;
+  }
+  .post-form input.store-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+  }
+  /* 写真の添付 */
+  .photo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+  }
+  .photo-btn {
+    display: inline-block;
+    padding: 7px 14px;
+    border: 1px solid #06C755;
+    border-radius: 6px;
+    background: #fff;
+    color: #06C755;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .photo-name {
+    flex: 1;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .photo-clear { color: #c0392b; text-decoration: none; white-space: nowrap; }
+  .photo-preview {
+    display: block;
+    max-width: 100%;
+    margin-top: 10px;
+    border-radius: 8px;
+  }
+  /* LINE通知の有無 */
+  .notify-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #1f8b4c;
+    font-weight: bold;
+  }
+  .notify-toggle input { width: auto; margin: 0; }
+  .notify-toggle.manual-toggle { color: #2f6fb0; }
+  .notify-note {
+    margin-top: 2px;
+    padding-left: 22px;
+    font-size: 11px;
+    color: #8a9490;
+    line-height: 1.5;
+  }
+  /* 解決済みの表示切替 */
+  .resolved-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: #666;
+  }
+  .resolved-toggle input { width: auto; margin: 0; }
+
+  .post-list { margin-top: 12px; }
+  .post-item {
+    border-bottom: 1px solid #eee;
+    padding: 12px 0;
+  }
+  /* 解決済みの投稿は控えめに表示する */
+  .post-item.post-resolved .post-body { color: #999; }
+  .status-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #e3e7e5;
+    color: #6b7370;
+    margin-right: 6px;
+  }
+  .post-image { display: block; margin-top: 8px; }
+  .post-image img {
+    max-width: 100%;
+    max-height: 320px;
+    border-radius: 8px;
+    border: 1px solid #eee;
+  }
+  .post-actions { display: flex; gap: 14px; margin-top: 8px; }
+  .post-action {
+    font-size: 12px;
+    color: #777;
+    text-decoration: none;
+    border-bottom: 1px solid #ddd;
+  }
+  .post-action.danger { color: #c0392b; border-bottom-color: #f0c4bd; }
+  .delete-confirm {
+    display: none;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #fff5f4;
+    color: #c0392b;
+    font-size: 12px;
+    line-height: 2;
+  }
+  .delete-confirm .post-action { margin-left: 10px; }
+  .post-meta { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .store-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #eef1ef;
+    color: #555;
+    margin-right: 6px;
+  }
+  .store-chip.store-shimotakaido { background: #e5f0fb; color: #1b5fb0; }
+  .store-chip.store-chitosekarasuyama { background: #fdefe0; color: #b0611b; }
+  .store-chip.store-sengawa { background: #f2e8fb; color: #7231b0; }
+  .store-chip.store-all { background: #06C755; color: #fff; }
+  .post-body { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
+  .status-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .status-未対応 { background: #fdecea; color: #c0392b; }
+  .status-対応中 { background: #fff6da; color: #a67c00; }
+  .status-対応済み { background: #e6f6ea; color: #1e7e34; }
+  .category-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 4px;
+  }
+  .category-general { background: #eef1ef; color: #555; }
+  .category-bug { background: #fde7e0; color: #b0401b; }
+  .answer-box {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #f5f7fa;
+    border-radius: 6px;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  .empty-note { color: #999; font-size: 14px; margin-top: 16px; }
+
+  .request-box {
+    background: #f5f7fa;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 18px;
+  }
+  .request-label { font-size: 13px; font-weight: bold; }
+  .request-sub { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .btn-outline {
+    background: #fff;
+    color: #06C755;
+    border: 1px solid #06C755;
+  }
+
+  .filter-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 4px;
+  }
+  .filter-select { display: block; margin-bottom: 16px; }
+  .comment-list { margin-top: 8px; }
+  .comment-item {
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #f5f7fa;
+    border-radius: 6px;
+  }
+  .comment-meta { font-size: 11px; color: #999; }
+  .comment-body { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .comment-form {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .comment-form .comment-input {
+    flex: 1;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 8px;
+    font-size: 14px;
+  }
+  .comment-form .comment-btn {
+    display: inline-block;
+    padding: 8px 14px;
+    background: #06C755;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+  <div id="app"><p class="loading">読み込み中...</p></div>
+
+<script>
+// ============================================================
+// この2つは環境に合わせて書き換えてください。
+//   LIFF_ID  … LINE DevelopersのLIFFアプリID
+//   GAS_URL  … GASウェブアプリの /exec URL（末尾に /exec まで含める）
+// ============================================================
+const LIFF_ID = '2010703154-HggFrqTC';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwdDN-Q4kPR1etX1scvXFctsrnCOATv86Lye7Gy2JYiaOBvtm7uTiyp3oTFgS_GbIRN/exec';
+
+const PAGE = new URLSearchParams(location.search).get('page') || '';
+
+// URLの末尾に &debug=1 を付けたときだけ、エラーの詳細を画面に表示する（原因調査用）
+if (new URLSearchParams(location.search).get('debug') === '1') {
+  document.documentElement.classList.add('debug-on');
+}
+
+// LINEのログイン情報が古くなっていた場合に、一度だけ自動で再ログインするための仕組み。
+// （無限ループを避けるため、1回試したらsessionStorageに印を付ける）
+function isTokenError_(res) {
+  if (!res || res.ok !== false) return false;
+  const msg = String(res.message || '');
+  return res.error === 'server_error'
+    && (msg.indexOf('トークン') >= 0 || msg.indexOf('ログイン情報') >= 0);
+}
+function recoverLogin_(res) {
+  if (!isTokenError_(res)) return false;
+  let tried = false;
+  try { tried = sessionStorage.getItem('portalRelogin') === '1'; } catch (e) {}
+  if (tried) return false;
+  try { sessionStorage.setItem('portalRelogin', '1'); } catch (e) {}
+  try { liff.logout(); } catch (e) {}
+  liff.login({ redirectUri: location.href });
+  return true;
+}
+function clearReloginFlag_() {
+  try { sessionStorage.removeItem('portalRelogin'); } catch (e) {}
+}
+
+// GAS側のJSON APIを呼び出すためのヘルパー（google.script.run の代わり）
+async function callGet(action, params) {
+  const qs = new URLSearchParams(Object.assign({ action: action }, params || {})).toString();
+  const r = await fetch(GAS_URL + '?' + qs);
+  const res = await r.json();
+  // トークン切れなら再ログインへ飛ばす（このPromiseは解決させない）
+  if (recoverLogin_(res)) return new Promise(function () {});
+  if (res && res.ok !== false) clearReloginFlag_();
+  return res;
+}
+async function callPost(action, params) {
+  const r = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // プリフライトを避けるため text/plain で送る
+    body: JSON.stringify(Object.assign({ action: action }, params || {})),
+  });
+  const res = await r.json();
+  if (recoverLogin_(res)) return new Promise(function () {});
+  if (res && res.ok !== false) clearReloginFlag_();
+  return res;
+}
+
+async function main() {
+  const app = document.getElementById('app');
+
+  if (!LIFF_ID) {
+    app.innerHTML = '<p class="msg">LIFF_IDが未設定です。管理部にご連絡ください。</p>';
+    return;
+  }
+
+  await liff.init({ liffId: LIFF_ID });
+  if (!liff.isLoggedIn()) {
+    // redirectUriを指定しないと、ログイン後に ?page=xxx が消えたURLへ戻ってしまうため、
+    // 現在のURL（クエリ文字列込み）を明示的に指定する。
+    liff.login({ redirectUri: location.href });
+    return;
+  }
+
+  // IDトークンは発行時刻から短時間で期限切れになり、LIFFが自動更新しないため使わない。
+  // アクセストークンはliff.init()時に更新されるので、こちらをサーバー側の本人確認に使う。
+  const idToken = liff.getAccessToken();
+  if (!idToken) {
+    app.innerHTML = '<p class="msg">LINEログイン情報を取得できませんでした。一度LINEアプリからメニューを開き直してください。</p>';
+    return;
+  }
+
+  // ?page= を付けずに開いたとき（URLを直接開いた場合など）は、入口メニューを表示する
+  if (!PAGE) {
+    return renderHome(idToken, app);
+  }
+
+  if (PAGE === 'register') {
+    return renderRegister(idToken, app);
+  }
+
+  if (PAGE === 'shift') {
+    return renderShiftForm(idToken, app);
+  }
+
+  if (PAGE === 'coupon') {
+    return renderCoupon(idToken, app);
+  }
+
+  if (PAGE === 'manual') {
+    return renderManual(idToken, app);
+  }
+
+  if (PAGE === 'board') {
+    return renderBoard(idToken, app);
+  }
+
+  if (PAGE === 'suggest') {
+    return renderSuggest(idToken, app);
+  }
+
+  // freee / manual / coupon などのゲート付きページ
+  let res;
+  try {
+    res = await callGet('resolveDestination', { idToken: idToken, page: PAGE });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+
+  if (res.allowed) {
+    location.href = res.url;
+    return;
+  }
+
+  switch (res.reason) {
+    case 'not_registered':
+      return renderRegister(idToken, app);
+    case 'not_approved':
+      app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+      break;
+    case 'inactive':
+      app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+      break;
+    default:
+      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
+        + '<p class="debug-detail">' + escapeHtml_(JSON.stringify(res)) + '</p>';
+  }
+}
+
+const STORE_OPTIONS = ['下高井戸店', '千歳烏山店', '仙川店', '本部'];
+
+function renderRegister(idToken, app) {
+  const storeOptionsHtml = ['<option value="" disabled selected>選択してください</option>']
+    .concat(STORE_OPTIONS.map((s) => `<option value="${s}">${s}</option>`))
+    .join('');
+  app.innerHTML = `
+    <p class="msg">初めてのご利用ですね。<br>お名前と所属店舗を入力してください。</p>
+    <input id="name" placeholder="氏名（例：山田太郎／スペースなしで入力）"><br>
+    <select id="store">${storeOptionsHtml}</select><br>
+    <a href="#" class="btn" id="submitBtn">登録する</a>
+  `;
+  document.getElementById('submitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    // 全角・半角スペースを除去して表記を統一する
+    const name = document.getElementById('name').value.trim().replace(/[\s　]+/g, '');
+    const store = document.getElementById('store').value;
+    if (!name || !store) {
+      alert('氏名と所属店舗を入力してください');
+      return;
+    }
+    app.innerHTML = '<p class="loading">登録中...</p>';
+    try {
+      const res = await callPost('registerUser', { idToken: idToken, name: name, store: store });
+      if (res.ok) {
+        app.innerHTML = '<p class="msg">登録を受け付けました。<br>管理部の承認後にご利用いただけます。</p>';
+      } else if (res.error === 'already_registered') {
+        app.innerHTML = '<p class="msg">登録済みです。管理部の承認をお待ちください。</p>';
+      } else {
+        app.innerHTML = '<p class="msg">登録に失敗しました。管理部までご連絡ください。</p>';
+      }
+    } catch (err) {
+      app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    }
+  });
+}
+
+async function renderShiftForm(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getShiftForm', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+
+  if (!res.allowed) {
+    switch (res.reason) {
+      case 'not_registered':
+        return renderRegister(idToken, app);
+      case 'not_approved':
+        app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+        break;
+      case 'inactive':
+        app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+        break;
+      default:
+        app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>';
+    }
+    return;
+  }
+
+  const availabilityOptions = res.availabilityOptions || ['昼', '夜', '不可'];
+  const days = res.dates.map((d) => {
+    const existing = res.existing[d.date] || {};
+    // 保存済みの値は「昼・夜」のように「・」区切りで入っているので、配列に戻す
+    const selected = String(existing.availability || '').split('・').filter(Boolean);
+    const wdClass = d.weekday === '土' ? 'sat' : (d.weekday === '日' ? 'sun' : '');
+    const timeVal = existing.timePref ? existing.timePref.replace(/"/g, '&quot;') : '';
+    // 定休日は入力させない（グレー表示にして、選択肢も入力欄も出さない）
+    if (d.closed) {
+      return `
+        <div class="shift-day shift-day-closed" data-date="${d.date}" data-closed="1">
+          <div class="shift-day-label">${d.date.slice(5)}（<span class="${wdClass}">${d.weekday}</span>）</div>
+          <div class="closed-label">定休日</div>
+        </div>`;
+    }
+    const btnsHtml = availabilityOptions.map((v) =>
+      `<button type="button" class="avail-btn${selected.indexOf(v) >= 0 ? ' active' : ''}" data-value="${v}">${v}</button>`
+    ).join('');
+    return `
+      <div class="shift-day" data-date="${d.date}">
+        <div class="shift-day-label">${d.date.slice(5)}（<span class="${wdClass}">${d.weekday}</span>）</div>
+        <div class="avail-toggle">${btnsHtml}</div>
+        <input class="time-input" type="text" placeholder="希望時間・備考（任意）" value="${timeVal}">
+      </div>`;
+  }).join('');
+
+  // 締切を過ぎていても提出はできる。その場合だけ注意書きを出す。
+  const overdueHtml = res.period.overdue
+    ? `<div class="overdue-note">締切（${res.period.deadline || ''}）を過ぎています。提出は可能ですが、シフトが確定済みの場合は希望に沿えないことがあります。至急提出してください。</div>`
+    : '';
+
+  // 提出済みの場合は、最終提出日時を控えとして画面上部に出す
+  const submittedHtml = res.submittedAt
+    ? `<div class="submitted-note">提出済みです（最終提出：${escapeHtml_(res.submittedAt)}）。<br>下の内容が現在の提出内容です。修正して再提出できます。</div>`
+    : '';
+
+  app.innerHTML = `
+    <div class="shift-wrap">
+      <div class="shift-title">シフト希望提出（${res.period.label}）</div>
+      <div class="shift-sub">${res.name}さん（${res.store}）<br>日ごとに「昼」「夜」「不可」から選んでください（昼と夜の両方を選べます）。<br>定休日を除く全ての日付の入力が必要です。締切は${res.period.deadline || ''}です。</div>
+      ${submittedHtml}
+      ${overdueHtml}
+      <div id="shiftDays">${days}</div>
+      <div id="shiftNotice" class="shift-notice"></div>
+      <div class="submit-row">
+        <a href="#" class="btn" id="shiftSubmitBtn">この内容で提出する</a>
+      </div>
+    </div>
+  `;
+
+  // 「昼」「夜」は複数選択できる。「不可」は他と同時に選べない（排他）。
+  document.querySelectorAll('.avail-toggle').forEach((group) => {
+    group.querySelectorAll('.avail-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const value = btn.getAttribute('data-value');
+        const wasActive = btn.classList.contains('active');
+        if (value === '不可') {
+          group.querySelectorAll('.avail-btn').forEach((b) => b.classList.remove('active'));
+          if (!wasActive) btn.classList.add('active');
+        } else {
+          const naBtn = group.querySelector('.avail-btn[data-value="不可"]');
+          if (naBtn) naBtn.classList.remove('active');
+          btn.classList.toggle('active');
+        }
+        group.parentElement.classList.remove('shift-day-error');
+      });
+    });
+  });
+
+  document.getElementById('shiftSubmitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    // 定休日は入力対象外なので除外する
+    const dayEls = document.querySelectorAll('#shiftDays .shift-day:not(.shift-day-closed)');
+    const entries = Array.from(dayEls).map((el) => {
+      const values = Array.from(el.querySelectorAll('.avail-btn.active'))
+        .map((b) => b.getAttribute('data-value'));
+      return {
+        date: el.getAttribute('data-date'),
+        availability: values.join('・'),
+        timePref: el.querySelector('.time-input').value.trim(),
+      };
+    });
+
+    // 未入力の日付があれば提出させない
+    const missing = [];
+    entries.forEach((entry, i) => {
+      const el = dayEls[i];
+      if (entry.availability) {
+        el.classList.remove('shift-day-error');
+      } else {
+        el.classList.add('shift-day-error');
+        missing.push(entry.date.slice(5));
+      }
+    });
+    if (missing.length > 0) {
+      const notice = document.getElementById('shiftNotice');
+      notice.textContent = '未入力の日付があります（' + missing.join('、') + '）。全ての日付を選択してください。';
+      notice.style.display = 'block';
+      const firstError = document.querySelector('.shift-day-error');
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    document.getElementById('shiftNotice').style.display = 'none';
+
+    document.getElementById('shiftSubmitBtn').textContent = '送信中...';
+    try {
+      const submitRes = await callPost('submitShift', { idToken: idToken, periodLabel: res.period.label, entries: entries });
+      if (submitRes.ok) {
+        renderShiftReceipt(submitRes, res, idToken, app);
+      } else {
+        app.innerHTML = '<p class="msg">提出に失敗しました。時間をおいて再度お試しください。</p>';
+      }
+    } catch (err) {
+      app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    }
+  });
+}
+
+/**
+ * 入口メニュー。?page= を付けずに開いたときに表示する。
+ * リッチメニューを使わずURLを直接開いた場合でも、各機能にたどり着けるようにするため。
+ */
+async function renderHome(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('checkStatus', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+
+  if (res.status === 'not_registered') {
+    return renderRegister(idToken, app);
+  }
+  if (res.active !== '在籍') {
+    app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+    return;
+  }
+  if (res.approval !== '承認済み') {
+    app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+    return;
+  }
+
+  const menu = [
+    { page: 'board', label: 'みんなの業務連絡', note: '店舗ごとの申し送り・連絡' },
+    { page: 'shift', label: 'シフト希望提出', note: '提出・確認・修正' },
+    { page: 'coupon', label: '従業員クーポン', note: 'スタッフ特別割引' },
+    { page: 'manual', label: 'マニュアル', note: '業務の手順・ルール' },
+    { page: 'suggest', label: '要望・質問箱', note: '管理部への相談' },
+  ];
+
+  app.innerHTML = `
+    <div class="home-wrap">
+      <div class="coupon-holder">
+        <div class="coupon-holder-name">${escapeHtml_(res.name)} さん</div>
+        <div class="coupon-holder-store">${escapeHtml_(res.store)}</div>
+      </div>
+      <div class="home-menu">
+        ${menu.map((m) => `
+          <a class="home-item" href="?page=${m.page}">
+            <span class="home-item-label">${m.label}</span>
+            <span class="home-item-note">${m.note}</span>
+          </a>`).join('')}
+      </div>
+      <p class="home-foot">通常はLINEのメニューから各機能を開いてください。</p>
+    </div>
+  `;
+}
+
+/**
+ * マニュアル画面。
+ * Notionの内容をサーバー経由で取り込んで表示する。
+ * ページを移動してもURLは ?page=manual のまま変わらないため、
+ * 転送しても承認されていない人は何も見られない。
+ */
+const manualHistory_ = []; // 「戻る」用のページIDの履歴
+
+async function renderManual(idToken, app, pageId, isBack) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getManual', pageId ? { idToken: idToken, pageId: pageId } : { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+  if (res.ok === false) {
+    app.innerHTML = '<p class="msg">マニュアルを読み込めませんでした。管理部までご連絡ください。</p>'
+      + '<p class="debug-detail">' + escapeHtml_(JSON.stringify(res)) + '</p>';
+    return;
+  }
+  if (!res.allowed) {
+    return renderDenied(res, idToken, app);
+  }
+
+  const backHtml = manualHistory_.length
+    ? '<button type="button" class="manual-back" id="manualBack">← 戻る</button>'
+    : '';
+
+  app.innerHTML = `
+    <div class="manual-wrap">
+      ${backHtml}
+      <div class="manual-title">${res.icon ? escapeHtml_(res.icon) + ' ' : ''}${escapeHtml_(res.title)}</div>
+      <div class="manual-body">${res.html}</div>
+    </div>
+  `;
+  window.scrollTo(0, 0);
+
+  // 子ページを画面内で開く
+  document.querySelectorAll('.manual-link').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      manualHistory_.push(res.pageId);
+      renderManual(idToken, app, btn.getAttribute('data-page-id'));
+    });
+  });
+
+  const backBtn = document.getElementById('manualBack');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      const prev = manualHistory_.pop();
+      renderManual(idToken, app, prev, true);
+    });
+  }
+}
+
+/**
+ * 従業員クーポン画面。
+ * 承認済み・在籍中のスタッフにだけ表示される。
+ * 画面上の時計は秒まで動くため、スクリーンショットでは時刻が止まる。
+ * 店頭では「時計が動いているか」を見れば、その場で開いた画面かどうか判別できる。
+ */
+async function renderCoupon(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getCoupon', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+  if (!res.allowed) {
+    return renderDenied(res, idToken, app);
+  }
+
+  const listOf = (arr) => (arr || []).map((c) => `<li>${escapeHtml_(c)}</li>`).join('');
+
+  // 上部の切替ボタンで「本人用」と「ご家族・お友達用」を1枚ずつ表示する。
+  // 2枚を同時に出さないことで、店頭でどちらのクーポンか誤認されないようにする。
+  const cardOf = (kind) => {
+    const c = kind === 'staff' ? res.staff : res.guest;
+    return `
+      <div class="coupon-card coupon-card-${kind}">
+        <div class="coupon-card-title">${escapeHtml_(c.title)}</div>
+        <div class="coupon-card-rate">${escapeHtml_(c.rate)}</div>
+        <ul class="coupon-conditions">${listOf(c.conditions)}</ul>
+      </div>`;
+  };
+
+  app.innerHTML = `
+    <div class="coupon-wrap">
+      <div class="coupon-holder">
+        <div class="coupon-holder-name">${escapeHtml_(res.name)} さん</div>
+        <div class="coupon-holder-store">${escapeHtml_(res.store)}</div>
+      </div>
+
+      <div class="coupon-tabs">
+        <button type="button" class="coupon-tab active" data-kind="staff">スタッフ特別割引<br>（30%）</button>
+        <button type="button" class="coupon-tab" data-kind="guest">ご家族お友達特別割引<br>（20%）</button>
+      </div>
+
+      <div class="coupon-clock">
+        <div class="coupon-clock-label">ただいまの時刻</div>
+        <div class="coupon-clock-time" id="couponClock">${escapeHtml_(res.issuedAt)}</div>
+        <div class="coupon-clock-note">この時刻が動いていることをスタッフがご確認ください</div>
+      </div>
+
+      <div id="couponBody">${cardOf('staff')}</div>
+
+      <div class="coupon-foot">本クーポンは、有効期間内であっても予告なく内容を変更または終了する場合があります。</div>
+    </div>
+  `;
+
+  const tabs = document.querySelectorAll('.coupon-tab');
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('couponBody').innerHTML = cardOf(tab.getAttribute('data-kind'));
+    });
+  });
+
+  startCouponClock_(res.issuedEpoch);
+}
+
+/** サーバーが発行した時刻を起点に、画面の時計を1秒ごとに進める */
+function startCouponClock_(issuedEpoch) {
+  const el = document.getElementById('couponClock');
+  if (!el || !issuedEpoch) return;
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  // 端末の時計がずれていても、サーバー発行時刻を基準にするための差分
+  const offset = issuedEpoch - Date.now();
+  const tick = () => {
+    if (!document.getElementById('couponClock')) return; // 画面が切り替わったら停止
+    const d = new Date(Date.now() + offset);
+    const p2 = (n) => (n < 10 ? '0' : '') + n;
+    el.textContent = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日('
+      + weekdays[d.getDay()] + ') '
+      + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+    setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+/**
+ * 提出後の控え画面。提出した内容をそのまま一覧で表示する。
+ *   submitRes … submitShift の応答（submittedAt / entries を含む）
+ *   formRes   … 直前に表示していたフォームのデータ（曜日や定休日の情報を持っている）
+ */
+function renderShiftReceipt(submitRes, formRes, idToken, app) {
+  const weekdayOf = {};
+  (formRes.dates || []).forEach((d) => { weekdayOf[d.date] = d.weekday; });
+
+  const rows = (submitRes.entries || []).map((e) => {
+    const wd = weekdayOf[e.date] || '';
+    const wdClass = wd === '土' ? 'sat' : (wd === '日' ? 'sun' : '');
+    const note = e.timePref ? escapeHtml_(e.timePref) : '';
+    return `
+      <div class="receipt-row">
+        <div class="receipt-date">${e.date.slice(5)}（<span class="${wdClass}">${wd}</span>）</div>
+        <div class="receipt-value">${escapeHtml_(e.availability || '')}</div>
+        <div class="receipt-note">${note}</div>
+      </div>`;
+  }).join('');
+
+  app.innerHTML = `
+    <div class="shift-wrap">
+      <div class="shift-title">シフト希望を提出しました</div>
+      <div class="submitted-note">${escapeHtml_(submitRes.periodLabel || '')}<br>提出日時：${escapeHtml_(submitRes.submittedAt || '')}</div>
+      <div class="receipt-list">${rows}</div>
+      <div class="shift-sub" style="margin-top:16px;">この控えはいつでも確認できます。もう一度この画面を開くと、提出済みの内容が表示され、修正して再提出できます。</div>
+      <div class="submit-row">
+        <a href="#" class="btn btn-sub" id="shiftBackBtn">内容を修正する</a>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('shiftBackBtn').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    renderShiftForm(idToken, app);
+  });
+}
+
+/** 未登録・未承認・在籍なし等の共通メッセージ表示。renderRegisterへの分岐が必要な場合はtrueを返す。
+ *  res … サーバーからの応答オブジェクト全体（デバッグ表示のため）。 */
+function renderDenied(res, idToken, app) {
+  const reason = res && res.reason;
+  switch (reason) {
+    case 'not_registered':
+      renderRegister(idToken, app);
+      return;
+    case 'not_approved':
+      app.innerHTML = '<p class="msg">現在、管理部の承認待ちです。<br>承認までしばらくお待ちください。</p>';
+      return;
+    case 'inactive':
+      app.innerHTML = '<p class="msg">このアカウントはご利用いただけません。<br>心当たりがない場合は管理部までご連絡ください。</p>';
+      return;
+    default:
+      app.innerHTML = '<p class="msg">現在この機能はご利用いただけません。管理部までご連絡ください。</p>'
+        + '<p class="debug-detail">' + escapeHtml_(JSON.stringify(res)) + '</p>';
+  }
+}
+
+/**
+ * 写真を投稿できるサイズまで縮小し、data URL（JPEG）にして返す。
+ * スマホの写真はそのままだと数MBあり、送信に失敗するため必ず縮小する。
+ */
+function shrinkImage_(file, maxSize) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('画像を読み込めませんでした'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('画像を読み込めませんでした'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function renderBoard(idToken, app, storeFilter, includeResolved) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getBoardPosts', {
+      idToken: idToken,
+      store: storeFilter || '全体',
+      includeResolved: includeResolved ? 'true' : 'false',
+    });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+  if (!res.allowed) {
+    return renderDenied(res, idToken, app);
+  }
+
+  // 絞り込みはタブで切り替える。「全体」は画面上「全ての投稿」と表示（サーバーに送る値は '全体'）
+  const filterTabsHtml = ['全体', '全店舗対象'].concat(res.stores).map((s) => {
+    const active = s === res.filter ? ' active' : '';
+    const label = s === '全体' ? '全ての投稿' : s;
+    return `<button type="button" class="board-tab${active}" data-filter="${s}">${label}</button>`;
+  }).join('');
+  const postStoreOptionsHtml = ['<option value="" disabled selected>選択してください</option>']
+    .concat(res.postTargets.map((s) => `<option value="${s}">${s}</option>`))
+    .join('');
+
+  const listHtml = res.posts.length
+    ? res.posts.map((p) => {
+        const commentsHtml = p.comments.length
+          ? p.comments.map((c) => `
+              <div class="comment-item">
+                <div class="comment-meta">${c.commentedAt}　${escapeHtml_(c.name)}</div>
+                <div class="comment-body">${escapeHtml_(c.body)}</div>
+              </div>`).join('')
+          : '';
+        const storeLabel = `<span class="store-chip ${storeChipClass_(p.store)}">${p.store}</span>`;
+        const resolvedChip = p.status === '解決済み'
+          ? '<span class="status-chip">解決済み</span>' : '';
+        const imageHtml = p.imageUrl
+          ? `<a class="post-image" href="${p.imageUrl}" target="_blank" rel="noopener">
+               <img src="${p.imageUrl}" alt="添付写真" loading="lazy"></a>`
+          : '';
+        // 削除・状態変更は、投稿者本人と本部だけに表示する
+        const manageHtml = p.canManage
+          ? `<div class="post-actions">
+               <a href="#" class="post-action status-btn" data-next="${p.status === '解決済み' ? '未解決' : '解決済み'}">${p.status === '解決済み' ? '未解決に戻す' : '解決済みにする'}</a>
+               <a href="#" class="post-action delete-btn">削除</a>
+             </div>
+             <div class="delete-confirm">
+               この投稿を削除します。よろしいですか？
+               <a href="#" class="post-action danger delete-yes">削除する</a>
+               <a href="#" class="post-action delete-no">やめる</a>
+             </div>`
+          : '';
+        return `
+        <div class="post-item${p.status === '解決済み' ? ' post-resolved' : ''}" data-post-id="${p.postId}">
+          <div class="post-meta">${storeLabel}${resolvedChip}${p.postedAt}　${escapeHtml_(p.name)}</div>
+          <div class="post-body">${escapeHtml_(p.body)}</div>
+          ${imageHtml}
+          ${manageHtml}
+          <div class="comment-list">${commentsHtml}</div>
+          <div class="comment-form">
+            <input class="comment-input" placeholder="コメントする">
+            <a href="#" class="comment-btn">送信</a>
+          </div>
+        </div>`;
+      }).join('')
+    : '<p class="empty-note">まだ投稿はありません。</p>';
+
+  // 解決済みの表示切替
+  const resolvedToggleHtml = `
+    <label class="resolved-toggle">
+      <input type="checkbox" id="showResolved" ${res.includeResolved ? 'checked' : ''}>
+      解決済みも表示する${(!res.includeResolved && res.resolvedHidden) ? `（${res.resolvedHidden}件）` : ''}
+    </label>`;
+
+  const missingStores = res.allStores.filter((s) => res.stores.indexOf(s) === -1);
+  const requestHtml = (res.restricted && missingStores.length)
+    ? `
+      <div class="request-box">
+        <div class="request-label">担当店舗が増えましたか？</div>
+        <div class="request-sub">追加してほしい店舗を選ぶと、本部に申請できます。</div>
+        <select id="requestStore">
+          <option value="" disabled selected>選択してください</option>
+          ${missingStores.map((s) => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+        <a href="#" class="btn btn-outline" id="requestStoreBtn">この店舗を追加申請する</a>
+      </div>`
+    : '';
+
+  app.innerHTML = `
+    <div class="post-wrap">
+      <div class="shift-title">みんなの業務連絡</div>
+      <div class="board-tabs">${filterTabsHtml}</div>
+      ${resolvedToggleHtml}
+      <div class="post-list">${listHtml}</div>
+      <details class="post-form" id="postForm">
+        <summary class="post-form-title">＋ 新しく投稿する</summary>
+        <div class="filter-label">対象店舗</div>
+        <select id="boardStore">${postStoreOptionsHtml}</select>
+        <textarea id="boardBody" placeholder="連絡内容を入力してください"></textarea>
+        <div class="photo-row">
+          <label class="photo-btn" for="boardPhoto">写真を選ぶ</label>
+          <input type="file" id="boardPhoto" accept="image/*" hidden>
+          <span class="photo-name" id="boardPhotoName">選択されていません</span>
+          <a href="#" class="photo-clear" id="boardPhotoClear" hidden>取り消す</a>
+        </div>
+        <img id="boardPhotoPreview" class="photo-preview" hidden alt="選択した写真">
+        <label class="notify-toggle">
+          <input type="checkbox" id="boardNotify">
+          対象店舗のスタッフにLINEで通知する
+        </label>
+        <div class="notify-note">通知には配信通数を消費します。急ぎの連絡のときだけお使いください。</div>
+        <label class="notify-toggle manual-toggle">
+          <input type="checkbox" id="boardToManual">
+          マニュアルに追加する
+        </label>
+        <div class="notify-note">今後もルールとして残したい内容のときに選んでください。管理部がマニュアルに反映します。</div>
+        <div class="submit-row"><a href="#" class="btn" id="boardSubmitBtn">投稿する</a></div>
+      </details>
+      ${requestHtml}
+    </div>
+  `;
+
+  // 現在の表示条件を保ったまま一覧を読み直すための共通処理
+  const currentFilter = res.filter;
+  const reload = (filter) => renderBoard(
+    idToken, app,
+    filter || currentFilter,
+    document.getElementById('showResolved').checked
+  );
+
+  document.querySelectorAll('.board-tab').forEach((tab) => {
+    tab.addEventListener('click', () => reload(tab.getAttribute('data-filter')));
+  });
+  document.getElementById('showResolved').addEventListener('change', () => reload());
+
+  // 写真の選択（選んだ時点で縮小し、プレビューを表示する）
+  let selectedPhoto = null;
+  const photoInput = document.getElementById('boardPhoto');
+  const photoName = document.getElementById('boardPhotoName');
+  const photoPreview = document.getElementById('boardPhotoPreview');
+  const photoClear = document.getElementById('boardPhotoClear');
+
+  const clearPhoto = () => {
+    selectedPhoto = null;
+    photoInput.value = '';
+    photoName.textContent = '選択されていません';
+    photoPreview.hidden = true;
+    photoClear.hidden = true;
+  };
+
+  photoInput.addEventListener('change', async () => {
+    const file = photoInput.files && photoInput.files[0];
+    if (!file) return clearPhoto();
+    photoName.textContent = '読み込み中...';
+    try {
+      selectedPhoto = await shrinkImage_(file, 1200);
+      photoPreview.src = selectedPhoto;
+      photoPreview.hidden = false;
+      photoClear.hidden = false;
+      photoName.textContent = file.name;
+    } catch (err) {
+      clearPhoto();
+      alert('この写真は読み込めませんでした。別の写真をお試しください。');
+    }
+  });
+
+  photoClear.addEventListener('click', (ev) => { ev.preventDefault(); clearPhoto(); });
+
+  const boardSubmitBtn = document.getElementById('boardSubmitBtn');
+  boardSubmitBtn.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const body = document.getElementById('boardBody').value;
+    const store = document.getElementById('boardStore').value;
+    if (!store) {
+      alert('投稿先の店舗を選択してください');
+      return;
+    }
+    if (!body.trim()) {
+      alert('内容を入力してください');
+      return;
+    }
+    boardSubmitBtn.textContent = selectedPhoto ? '写真を送信中...' : '送信中...';
+    try {
+      const params = { idToken: idToken, store: store, body: body };
+      if (selectedPhoto) {
+        params.image = { data: selectedPhoto, mimeType: 'image/jpeg' };
+      }
+      if (document.getElementById('boardNotify').checked) {
+        params.notify = true;
+      }
+      if (document.getElementById('boardToManual').checked) {
+        params.toManual = true;
+      }
+      const submitRes = await callPost('postBoard', params);
+      if (submitRes.ok) {
+        const notes = [];
+        const n = submitRes.notified;
+        if (n && n.error) {
+          notes.push('通知の送信に失敗しました。');
+        } else if (n) {
+          notes.push(n.sent + '人に通知しました。');
+        }
+        const m = submitRes.manual;
+        if (m && !m.ok) {
+          notes.push('マニュアルへの追加に失敗しました。');
+        } else if (m) {
+          notes.push('マニュアルに追加しました。');
+        }
+        if (notes.length) alert(notes.join('\n'));
+        reload();
+      } else {
+        alert('投稿に失敗しました。時間をおいて再度お試しください。');
+        boardSubmitBtn.textContent = '投稿する';
+      }
+    } catch (err) {
+      alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+      boardSubmitBtn.textContent = '投稿する';
+    }
+  });
+
+  // 解決済み／未解決の切り替え
+  document.querySelectorAll('.status-btn').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const postId = btn.closest('.post-item').getAttribute('data-post-id');
+      const next = btn.getAttribute('data-next');
+      btn.textContent = '変更中...';
+      try {
+        const r = await callPost('setBoardPostStatus', { idToken: idToken, postId: postId, status: next });
+        if (r.ok) { reload(); } else { alert('変更に失敗しました。'); }
+      } catch (err) {
+        alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+      }
+    });
+  });
+
+  // 削除（いきなり消さず、確認の1ステップを挟む）
+  document.querySelectorAll('.delete-btn').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const item = btn.closest('.post-item');
+      item.querySelector('.post-actions').style.display = 'none';
+      item.querySelector('.delete-confirm').style.display = 'block';
+    });
+  });
+  document.querySelectorAll('.delete-no').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const item = btn.closest('.post-item');
+      item.querySelector('.delete-confirm').style.display = 'none';
+      item.querySelector('.post-actions').style.display = 'flex';
+    });
+  });
+  document.querySelectorAll('.delete-yes').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const postId = btn.closest('.post-item').getAttribute('data-post-id');
+      btn.textContent = '削除中...';
+      try {
+        const r = await callPost('deleteBoardPost', { idToken: idToken, postId: postId });
+        if (r.ok) { reload(); } else { alert('削除に失敗しました。'); }
+      } catch (err) {
+        alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+      }
+    });
+  });
+
+  const requestStoreBtn = document.getElementById('requestStoreBtn');
+  if (requestStoreBtn) {
+    requestStoreBtn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const store = document.getElementById('requestStore').value;
+      if (!store) {
+        alert('追加してほしい店舗を選択してください');
+        return;
+      }
+      requestStoreBtn.textContent = '送信中...';
+      try {
+        const reqRes = await callPost('requestStoreAccess', { idToken: idToken, store: store });
+        if (reqRes.ok) {
+          alert('本部に申請しました。承認され次第、閲覧・投稿できるようになります。');
+          reload();
+        } else {
+          alert('申請に失敗しました。時間をおいて再度お試しください。');
+          requestStoreBtn.textContent = 'この店舗を追加申請する';
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+        requestStoreBtn.textContent = 'この店舗を追加申請する';
+      }
+    });
+  }
+
+  document.querySelectorAll('.comment-btn').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const postItem = btn.closest('.post-item');
+      const postId = postItem.getAttribute('data-post-id');
+      const input = postItem.querySelector('.comment-input');
+      const body = input.value;
+      if (!body.trim()) {
+        alert('コメント内容を入力してください');
+        return;
+      }
+      btn.textContent = '送信中...';
+      try {
+        const submitRes = await callPost('postBoardComment', { idToken: idToken, postId: postId, body: body });
+        if (submitRes.ok) {
+          reload();
+        } else {
+          alert('コメントの送信に失敗しました。時間をおいて再度お試しください。');
+          btn.textContent = '送信';
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+        btn.textContent = '送信';
+      }
+    });
+  });
+}
+
+async function renderSuggest(idToken, app) {
+  app.innerHTML = '<p class="loading">読み込み中...</p>';
+
+  let res;
+  try {
+    res = await callGet('getSuggestions', { idToken: idToken });
+  } catch (err) {
+    app.innerHTML = '<p class="msg">通信エラーが発生しました。時間をおいて再度お試しください。</p>';
+    return;
+  }
+  if (!res.allowed) {
+    return renderDenied(res, idToken, app);
+  }
+
+  const listHtml = res.items.length
+    ? res.items.map((it) => `
+        <div class="post-item">
+          <div class="post-meta">${it.postedAt}${res.isHq ? '　' + it.name + '（' + it.store + '）' : ''}
+            <span class="category-badge category-${it.category === '不具合報告' ? 'bug' : 'general'}">${it.category}</span>
+            <span class="status-badge status-${it.status}">${it.status}</span>
+          </div>
+          <div class="post-body">${escapeHtml_(it.body)}</div>
+          ${it.answer ? `<div class="answer-box">本部より：${escapeHtml_(it.answer)}</div>` : ''}
+        </div>`).join('')
+    : '<p class="empty-note">まだ投稿はありません。</p>';
+
+  app.innerHTML = `
+    <div class="post-wrap">
+      <div class="shift-title">本部への要望・質問${res.isHq ? '（全員分）' : ''}</div>
+      <div class="shift-sub">${res.isHq ? '全スタッフからの投稿を確認できます。' : '内容は投稿者本人と本部のみが閲覧できます。システムの不具合報告もこちらから送れます。'}</div>
+      <div class="post-form">
+        <select id="suggestCategory">
+          <option value="一般要望">一般要望・質問</option>
+          <option value="不具合報告">不具合報告（システムの不具合）</option>
+        </select>
+        <textarea id="suggestBody" placeholder="要望・改善案・質問や、不具合の内容（発生した画面・操作内容など）を入力してください"></textarea>
+        <div class="submit-row"><a href="#" class="btn" id="suggestSubmitBtn">送信する</a></div>
+      </div>
+      <div class="post-list">${listHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('suggestSubmitBtn').addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const body = document.getElementById('suggestBody').value;
+    const category = document.getElementById('suggestCategory').value;
+    if (!body.trim()) {
+      alert('内容を入力してください');
+      return;
+    }
+    try {
+      const submitRes = await callPost('postSuggestion', { idToken: idToken, body: body, category: category });
+      if (submitRes.ok) {
+        renderSuggest(idToken, app);
+      } else {
+        alert('送信に失敗しました。時間をおいて再度お試しください。');
+      }
+    } catch (err) {
+      alert('通信エラーが発生しました。時間をおいて再度お試しください。');
+    }
+  });
+}
+
+/** 掲示板の店舗タグを店舗ごとに色分けするためのクラス名を返す */
+function storeChipClass_(store) {
+  const map = {
+    '下高井戸店': 'store-shimotakaido',
+    '千歳烏山店': 'store-chitosekarasuyama',
+    '仙川店': 'store-sengawa',
+    '全店舗対象': 'store-all',
+  };
+  return map[store] || '';
+}
+
+function escapeHtml_(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+main().catch((err) => {
+  // 想定外のエラー。URLに &debug=1 を付けると、下に原因が表示される。
+  document.getElementById('app').innerHTML =
+    '<p class="msg">エラーが発生しました。管理部までご連絡ください。</p>' +
+    '<a class="btn" href="?page=board">みんなの業務連絡を開く</a>' +
+    '<p class="debug-detail">' + escapeHtml_(String(err && err.stack ? err.stack : err)) + '</p>';
+  console.error(err);
+});
+</script>
+</body>
+</html>
